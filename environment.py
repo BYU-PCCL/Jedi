@@ -4,7 +4,7 @@ import numpy as np
 class ArrayEnvironment():
     def __init__ (self, args):
         self.size = 20
-        self.goal = self.size // 2
+        self.goal = 3 #  self.size // 2
         self.position = 0
         self.episodes = 0
         self.score = 0
@@ -16,16 +16,11 @@ class ArrayEnvironment():
     def get_state_space(self):
         return [1]
 
-    def dist_to_goal(self):
-        return abs(self.goal - self.position)
-
     def act(self, action):
-        before = self.dist_to_goal()
+        reward = self.reward(self.position, action)
+
         self.position = self.transition(self.position, action)
 
-        after = self.dist_to_goal()
-
-        reward = before - after
         self.score += reward
 
         return self.get_state(), reward, self.get_terminal()
@@ -37,10 +32,12 @@ class ArrayEnvironment():
         return 0 #abs(self.goal - state) - abs(self.goal - next_state)
 
     def transition(self, state, action):
-        if action == 0:
-            return min(state + 1, self.size - 1)
+        if action == 1:
+            return (state + 1) % self.size
+            # return min(state + 1, self.size - 1)
         else:
-            return max(0, (state - 1))
+            return (state - 1) % self.size
+            # return max(0, (state - 1))
 
     def get_episodes(self):
         return self.episodes
@@ -51,8 +48,11 @@ class ArrayEnvironment():
     def get_state(self):
         return np.array(self.position)
 
+    def max_state_value(self):
+        return self.size
+
     def get_terminal(self):
-        return self.position == self.size // 2
+        return self.position == self.goal
 
     def reset(self):
         self.episodes += 1

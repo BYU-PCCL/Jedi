@@ -31,34 +31,72 @@ class Agent():
 
     def train(self):
 
-        states = []
-        next_states = []
-        actions = []
-        terminals = []
-        rewards = []
+        ideal_states = []
+        ideal_next_states = []
+        ideal_actions = []
+        ideal_terminals = []
+        ideal_rewards = []
 
-        # for _ in range(self.args.batch_size):
-        #     i = random.randint(0, len(self.memory) - 2)
-        #     experience = self.memory[i]
-        #     next_experience = self.memory[i + 1]
-        #     states.append([experience[0]])
-        #     rewards.append(experience[1])
-        #     actions.append(experience[2])
-        #     terminals.append(experience[3])
-        #     next_states.append([next_experience[0]])
-
+        self.memory = []
+        priorities = []
         for state in range(self.environment.size):
             for action in range(2):
-                states.append([state])
-                rewards.append(self.environment.reward(state, action))
-                next_states.append([self.environment.transition(state, action)])
-                actions.append(action)
-                terminals.append(int(next_states[-1][0] == self.environment.goal))
+                ideal_states.append([state])
+                ideal_rewards.append(self.environment.reward(state, action))
+                ideal_next_states.append([self.environment.transition(state, action)])
+                ideal_actions.append(action)
+                ideal_terminals.append(int(ideal_next_states[-1][0] == self.environment.goal))
 
-                print states[-1], actions[-1], next_states[-1], rewards[-1], terminals[-1],  self.environment.goal
+                self.memory.append([ideal_states[-1][0], ideal_rewards[-1], ideal_actions[-1], ideal_terminals[-1], ideal_next_states[-1][0]])
+                priorities.append(100.0)
 
-        for _ in range(10000):
-            self.network.train(states, actions, terminals, next_states, rewards)
-            print self.network.q(np.atleast_2d(49)), self.network.q(np.atleast_2d(51))
+        priorities = np.array(priorities)
+        non_terminal_trains = 0
+        non_terminal_trains_per_n = [0]
+        tmp_iterations = 3000
+        for tmp in range(tmp_iterations):
+            states = []
+            next_states = []
+            actions = []
+            terminals = []
+            rewards = []
+            indicies = []
 
+            for _ in range(self.args.batch_size):
+                i = np.random.choice(len(self.memory), p=priorities / np.sum(priorities))
+                experience = self.memory[i]
+                #next_experience = self.memory[i + 1]
+
+                states.append([experience[0]])
+                rewards.append(experience[1])
+                actions.append(experience[2])
+                terminals.append(experience[3])
+                next_states.append([experience[4]])
+                indicies.append(i)
+
+                if not terminals[-1]:
+                    non_terminal_trains += 1
+
+            if tmp % 50 == 0:
+                non_terminal_trains_per_n.append(non_terminal_trains - non_terminal_trains_per_n[-1])
+
+            tderror, total_loss = self.network.train(ideal_states, ideal_actions, ideal_terminals, ideal_next_states, ideal_rewards)
+
+            policy = self.network.q(ideal_states)[0]
+
+            print "Iteration:{:>5} Loss:{:>10.5}      Policy:{}".format(tmp, total_loss, "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)))
+
+            # for i, error in enumerate(tderror):
+            #     priorities[i] = error ** 2
+
+        print "{}/{} = {:5.5}% non terminal trains of total".format(non_terminal_trains, self.args.batch_size * 1000, 100 * non_terminal_trains / (self.args.batch_size * tmp_iterations))
+
+        for p in non_terminal_trains_per_n:
+            print p / non_terminal_trains
+
+        for i, s in enumerate(ideal_states):
+            qs = self.network.q(np.atleast_2d(ideal_states[i]))[1][0]
+            action = self.network.q(np.atleast_2d(ideal_states[i]))[0][0]
+            error = priorities[i]
+            print "{:>5} {:>5} {:>5} {:>5} {:>5} Action: {:>5} {} \t {:<+10.5}".format(ideal_states[i], ideal_actions[i], ideal_next_states[i], ideal_rewards[i], ideal_terminals[i], action, qs, error)
         quit()

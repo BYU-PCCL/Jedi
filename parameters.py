@@ -19,7 +19,7 @@ class Parameters():
         harness_args.add_argument('--log_frequency', default=1000, type=int, help='log every n iterations')
         harness_args.add_argument('--evaluate_frequency', default=1000, type=int, help='evaluate every n episodes')
 
-        environment_args = self.parser.add_argument_group('ale.environment')
+        environment_args = self.parser.add_argument_group('ALE Environment')
         environment_args.add_argument('--frame_skip', default=4, type=int, help='repeat actions for n frames')
         environment_args.add_argument('--repeat_actions', default=4, type=int, help='repeat actions for n frames')
         environment_args.add_argument('--rom', default="breakout", help='filename in /worlds/ALE/roms to run')
@@ -38,13 +38,15 @@ class Parameters():
         agent_args.add_argument('--exploration_epsilon_decay', default=1000, type=int, help='over how many calls to train should epsilon decay')
         agent_args.add_argument('--exploration_epsilon_evaluation', default=.05, type=int, help='over how many calls to train should epsilon decay')
 
-
         network_args = self.parser.add_argument_group('Network')
-        network_args.add_argument('--discount', default=.50, type=float, help='gamma, the discount rate')
-        network_args.add_argument('--learning_rate', default=.0002, type=float, help='the learning rate')
+        network_args.add_argument('--discount', default=.90, type=float, help='gamma, the discount rate')
+        network_args.add_argument('--learning_rate_start', default=0.0001, type=float, help='the learning rate')
+        network_args.add_argument('--learning_rate_end', default=0.0, type=float, help='the learning rate')
+        network_args.add_argument('--learning_rate_decay', default=3000, type=float, help='the learning rate')
+        network_args.add_argument('--initializer', default='xavier', type=str, help='xavier | normal | truncated-normal | uniform')
         network_args.add_argument('--rms_eps', default=0.01, type=float, help='the epsilon for rmsprop')
-        network_args.add_argument('--rms_decay', default=.9, type=float, help='the decay for rmsprop')
-        network_args.add_argument('--rms_momentum', default=0.95, type=float, help='the momentum for rmsprop')
+        network_args.add_argument('--rms_decay', default=.90, type=float, help='the decay for rmsprop')
+        network_args.add_argument('--rms_momentum', default=0.99, type=float, help='the momentum for rmsprop')
         network_args.add_argument('--gpu_fraction', default=1, type=float, help='how much gpu to use')
 
     def parse(self):
