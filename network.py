@@ -126,6 +126,4 @@ class Linear(Network):
         }
         _, self.training_iterations, delta, loss, lr = self.sess.run([self.optimizer, self.global_step, self.delta, self.loss, self.learning_rate], feed_dict=data)
 
-        print lr
-
         return delta, loss
