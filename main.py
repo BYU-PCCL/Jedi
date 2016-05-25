@@ -1,7 +1,7 @@
 from parameters import Parameters
 from agent import Agent
-from network import Linear
-from environment import ArrayEnvironment
+from network import Linear, Baseline
+from environment import ArrayEnvironment, AtariEnvironment
 from monitor import Monitor
 from tqdm import tqdm
 
@@ -9,8 +9,8 @@ parameters = Parameters()
 args = parameters.parse()
 
 # Initialize
-environment = ArrayEnvironment(args)
-network = Linear(args, environment)
+environment = AtariEnvironment(args)
+network = Baseline(args, environment)
 agent = Agent(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
 
@@ -24,7 +24,7 @@ state = environment.get_state()
 for _ in tqdm(range(args.max_ticks)):
 
     # Determine if we should evaluate this episode or not
-    is_evaluate = environment.get_episodes() % args.evaluate_frequency == 0
+    is_evaluate = (environment.get_episodes() + 1) % args.evaluate_frequency == 0
 
     action, q_values = agent.get_action(state, is_evaluate)
     state, reward, terminal = environment.act(action)
@@ -39,6 +39,5 @@ for _ in tqdm(range(args.max_ticks)):
 
 # TODO
 # Network Weight Visualizer
-# Policy Explorer and fixup
 # ALE Environment
 # Hook up SQL

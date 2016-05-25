@@ -1,11 +1,12 @@
 import argparse
+import random
 
 class Parameters():
     def __init__(self):
         self.parser = argparse.ArgumentParser(description='Q-Learner')
         sql_args = self.parser.add_argument_group('SQL Monitor')
         sql_args.add_argument('--bypass_sql', action='store_const', const=True, default=False, help='do not send sql')
-        sql_args.add_argument('--sql.stat_host', default="192.168.23.44", help='hostname of postgres db')
+        sql_args.add_argument('--stat_host', default="192.168.23.44", help='hostname of postgres db')
         sql_args.add_argument('--stat_db', default="vinci", help='postgres db name')
         sql_args.add_argument('--stat_port', default=5432, type=int, help='port to postgres db')
 
@@ -18,22 +19,24 @@ class Parameters():
         harness_args.add_argument('--max_ticks', default=100000, type=int, help='max iterations in main loop')
         harness_args.add_argument('--log_frequency', default=1000, type=int, help='log every n iterations')
         harness_args.add_argument('--evaluate_frequency', default=1000, type=int, help='evaluate every n episodes')
+        harness_args.add_argument('--train_frequency', default=4, type=int, help='train every n frames')
 
         environment_args = self.parser.add_argument_group('ALE Environment')
         environment_args.add_argument('--frame_skip', default=4, type=int, help='repeat actions for n frames')
-        environment_args.add_argument('--repeat_actions', default=4, type=int, help='repeat actions for n frames')
+        environment_args.add_argument('--actions_per_tick', default=4, type=int, help='repeat actions for n frames')
         environment_args.add_argument('--rom', default="breakout", help='filename in /worlds/ALE/roms to run')
         environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')
         environment_args.add_argument('--max_initial_noop', default=30, type=int, help='randomize initial conditions with some noops')
         environment_args.add_argument('--negative_reward_on_death', action='store_const', const=True, default=False, help='load network and agent')
         environment_args.add_argument('--resize_width', default=84, type=int, help='the width of the input to the network')
         environment_args.add_argument('--resize_height', default=84, type=int, help='the height of the input to the network')
+        environment_args.add_argument('--buffer_size', default=2, type=int, help='number of frames to max')
 
         agent_args = self.parser.add_argument_group('Agent')
         agent_args.add_argument('--phi_frames', default=4, type=int, help='the number of frames in phi')
         agent_args.add_argument('--replay_memory_size', default=1000000, type=int, help='maximum number of frames')
         agent_args.add_argument('--batch_size', default=32, type=int, help='the batch size passed to the network')
-        agent_args.add_argument('--iterations_before_training', default=10, type=int, help='the number of frames to collect before begining training')
+        agent_args.add_argument('--iterations_before_training', default=5, type=int, help='the number of frames to collect before begining training')
         agent_args.add_argument('--exploration_epsilon_end', default=.1, type=float, help='the minimum exploration epsilon')
         agent_args.add_argument('--exploration_epsilon_decay', default=1000, type=int, help='over how many calls to train should epsilon decay')
         agent_args.add_argument('--exploration_epsilon_evaluation', default=.05, type=int, help='over how many calls to train should epsilon decay')
@@ -47,10 +50,18 @@ class Parameters():
         network_args.add_argument('--rms_eps', default=0.01, type=float, help='the epsilon for rmsprop')
         network_args.add_argument('--rms_decay', default=.90, type=float, help='the decay for rmsprop')
         network_args.add_argument('--rms_momentum', default=0.99, type=float, help='the momentum for rmsprop')
-        network_args.add_argument('--gpu_fraction', default=1, type=float, help='how much gpu to use')
+        network_args.add_argument('--gpu_fraction', default=.90, type=float, help='how much gpu to use')
 
     def parse(self):
-        return self.parser.parse_args()
+        args = self.parser.parse_args()
+
+        if args.deterministic:
+            args.random_seed = 42
+        else:
+            args.random_seed = random.randint(1, 10000)
+
+        return args
+
 
 #harness_args.add_argument('--evaluate_episode_frequency', default=100, type=int, help='evaluate every n episodes')
 #harness_args.add_argument('--save_tick_frequency', default=-1, type=int, help='save every n frames')
