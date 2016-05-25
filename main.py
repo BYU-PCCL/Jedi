@@ -14,6 +14,9 @@ network = Linear(args, environment)
 agent = Agent(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
 
+#TODO: remove
+agent.monitor = monitor
+
 # Get initial state
 state = environment.get_state()
 
@@ -33,3 +36,9 @@ for _ in tqdm(range(args.max_ticks)):
     # Reset if needed
     if terminal:
         environment.reset()
+
+# TODO
+# Network Weight Visualizer
+# Policy Explorer and fixup
+# ALE Environment
+# Hook up SQL

@@ -31,26 +31,17 @@ class Agent():
 
     def train(self):
 
-        ideal_states = []
-        ideal_next_states = []
-        ideal_actions = []
-        ideal_terminals = []
-        ideal_rewards = []
+        ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.environment.generate_test()
 
         self.memory = []
         priorities = []
-        for state in range(self.environment.size):
-            for action in range(2):
-                ideal_states.append([state])
-                ideal_rewards.append(self.environment.reward(state, action))
-                ideal_next_states.append([self.environment.transition(state, action)])
-                ideal_actions.append(action)
-                ideal_terminals.append(int(ideal_next_states[-1][0] == self.environment.goal))
-
-                self.memory.append([ideal_states[-1][0], ideal_rewards[-1], ideal_actions[-1], ideal_terminals[-1], ideal_next_states[-1][0]])
-                priorities.append(100.0)
+        for i, s in enumerate(ideal_states):
+            self.memory.append([ideal_states[i][0], ideal_rewards[i], ideal_actions[i], ideal_terminals[i],
+                                ideal_next_states[i][0]])
+            priorities.append(100.0)
 
         priorities = np.array(priorities)
+
         non_terminal_trains = 0
         non_terminal_trains_per_n = [0]
         tmp_iterations = 3000
@@ -85,6 +76,8 @@ class Agent():
             policy = self.network.q(ideal_states)[0]
 
             print "Iteration:{:>5} Loss:{:>10.5}      Policy:{}".format(tmp, total_loss, "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)))
+
+            self.monitor.visualize()
 
             # for i, error in enumerate(tderror):
             #     priorities[i] = error ** 2

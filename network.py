@@ -1,8 +1,8 @@
 import tensorflow as tf
 
-
 class Network():
     def __init__(self, args):
+        self.args = args
         self.training_iterations = 0
         self.default_initializer = 'normal'
 
@@ -11,6 +11,9 @@ class Network():
         self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
+        self.weights = []
+        self.biases = []
+        self.activations = []
 
     def one_hot(self, source, size, name='onehot'):
         return tf.one_hot(source, size, 1.0, 0.0, name=name)
@@ -52,6 +55,10 @@ class Network():
 
             out = tf.add(tf.matmul(source, w), b)
             activated = activation_fn(out) if activation_fn is not None else out
+
+            self.weights.append(w)
+            self.biases.append(b)
+            self.activations.append(activated)
 
             return activated, w, b
 

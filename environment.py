@@ -58,3 +58,21 @@ class ArrayEnvironment():
         self.episodes += 1
         self.score = 0
         self.position = random.randint(0, self.size - 1)
+
+    def generate_test(self):
+        states = []
+        next_states = []
+        actions = []
+        terminals = []
+        rewards = []
+
+        for state in range(self.size):
+            for action in range(2):
+                states.append([state])
+                rewards.append(self.reward(state, action))
+                next_states.append([self.transition(state, action)])
+                actions.append(action)
+                terminals.append(int(next_states[-1][0] == self.goal))
+
+        return states, actions, rewards, next_states, terminals
+
