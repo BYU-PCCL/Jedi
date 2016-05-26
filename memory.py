@@ -48,6 +48,9 @@ class Memory:
             indexes = [(index - i) % self.count for i in reversed(range(self.args.phi_frames))]
             return self.screens[indexes, ...]
 
+    def can_sample(self):
+        return self.count > self.args.phi_frames
+
     def sample(self):
         # memory must include poststate, prestate and history
         assert self.count > self.args.phi_frames

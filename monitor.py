@@ -67,24 +67,24 @@ class Monitor:
 
         # QT and CV2 seem to dislike working together
         # Q-Value Visualizer
-        self.test_data = self.environment.generate_test()
-        if self.test_data:
-            self.history = np.zeros((len(self.test_data[0]), 500, self.environment.get_num_actions()))
-
-            self.app = QtGui.QApplication([])
-            self.q_win = pg.GraphicsWindow(title="Q Monitor")
-            self.q_win.resize(1000, 1000)
-            pg.setConfigOptions(antialias=True)
-
-            if self.test_data is not None:
-                self.q_plots = []
-                for i, _ in enumerate(self.test_data[0]):
-                    plot = self.q_win.addPlot()
-                    plot.hideAxis('bottom')
-                    plot.hideAxis('left')
-                    #plot.labelAxis('')
-                    self.q_win.nextRow() if (i + 1) % 3 == 0 else None
-                    self.q_plots.append([plot.plot(pen=(a + 1) * 5) for a in range(self.environment.get_num_actions())])
+        # self.test_data = self.environment.generate_test()
+        # if self.test_data:
+        #     self.history = np.zeros((len(self.test_data[0]), 500, self.environment.get_num_actions()))
+        #
+        #     self.app = QtGui.QApplication([])
+        #     self.q_win = pg.GraphicsWindow(title="Q Monitor")
+        #     self.q_win.resize(1000, 1000)
+        #     pg.setConfigOptions(antialias=True)
+        #
+        #     if self.test_data is not None:
+        #         self.q_plots = []
+        #         for i, _ in enumerate(self.test_data[0]):
+        #             plot = self.q_win.addPlot()
+        #             plot.hideAxis('bottom')
+        #             plot.hideAxis('left')
+        #             #plot.labelAxis('')
+        #             self.q_win.nextRow() if (i + 1) % 3 == 0 else None
+        #             self.q_plots.append([plot.plot(pen=(a + 1) * 5) for a in range(self.environment.get_num_actions())])
 
     def save_stat(self, stat_name, value):
         if not self.args.bypass_sql:

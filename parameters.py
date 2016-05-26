@@ -21,8 +21,10 @@ class Parameters():
         harness_args.add_argument('--total_ticks', default=100000, type=int, help='max iterations in main loop')
         harness_args.add_argument('--evaluate_frequency', default=1000, type=int, help='evaluate every n episodes')
         harness_args.add_argument('--train_frequency', default=4, type=int, help='train every n frames')
-        harness_args.add_argument('--console_frequency', default=1000, type=int, help='print every n iterations')
+        harness_args.add_argument('--console_frequency', default=1000, type=int, help='print every n iterations if verbose')
         harness_args.add_argument('--max_frames_per_episode', default=100, type=int)
+        harness_args.add_argument('--threads', default=1, type=int)
+
 
         environment_args = self.parser.add_argument_group('ALE Environment')
         environment_args.add_argument('--actions_per_tick', default=4, type=int, help='repeat actions for n frames')
@@ -51,6 +53,7 @@ class Parameters():
         network_args.add_argument('--rms_decay', default=.90, type=float, help='the decay for rmsprop')
         network_args.add_argument('--rms_momentum', default=0.99, type=float, help='the momentum for rmsprop')
         network_args.add_argument('--gpu_fraction', default=.90, type=float, help='how much gpu to use')
+        network_args.add_argument('--copy_frequency', default=1000, type=int, help='copy to target every n trains')
 
     def parse(self):
         args = self.parser.parse_args()

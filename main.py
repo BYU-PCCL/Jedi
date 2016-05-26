@@ -1,6 +1,6 @@
 from parameters import Parameters
 from agent import Agent
-from network import Linear, Baseline
+from network import Linear, Baseline, TrainTarget
 from environment import ArrayEnvironment, AtariEnvironment
 from monitor import Monitor
 from tqdm import tqdm
@@ -17,22 +17,29 @@ np.random.seed(args.random_seed)
 
 # Initialize
 environment = AtariEnvironment(args)
-network = Baseline(args, environment)
+network = TrainTarget(Baseline, args, environment)
 agent = Agent(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
 
 # Get initial state
 state = environment.get_state()
 
-# Handle Ctrl+C
+# Harness Variables
 force_eval = False
 eval_pending = False
+
+
+# Handle Ctrl + c
 def commander(signal, frame):
-    command = raw_input("\n\nCommand [args | eval]: ")
+    command = raw_input("\n\nCommand [args | eval | verbose | quiet]: ")
     if command == "args":
         for key in sorted(vars(args)):
             print "{0:>40} : {1}".format(key, getattr(args, key))
         raw_input("Press enter to continue.")
+    elif command == "verbose":
+        args.verbose = True
+    elif command == "quiet":
+        args.verbose = False
     elif command == "eval":
         global eval_pending
         eval_pending = True
