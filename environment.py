@@ -6,7 +6,7 @@ import cv2
 class ArrayEnvironment:
     def __init__(self, args):
         self.size = 20
-        self.goal = 3 #  self.size // 2
+        self.goal = 4 #self.size // 2
         self.position = [0]
         self.episodes = 0
         self.score = 0
@@ -19,27 +19,30 @@ class ArrayEnvironment:
         return tuple([1])
 
     def act(self, action):
+
         reward = self.reward(self.position, action)
 
         self.position = self.transition(self.position, action)
 
         self.score += reward
+        self.frames += 1
 
         return self.get_state(), reward, self.get_terminal()
 
     def reward(self, state, action):
         next_state = self.transition(state, action)
+
         if next_state[0] == self.goal:
             return 50
         return 0 #abs(self.goal - state) - abs(self.goal - next_state)
 
     def transition(self, state, action):
         if action == 1:
-            return [(state[0] + 1) % self.size]
-            # return min(state + 1, self.size - 1)
+            #return [(state[0] + 1) % self.size]
+            return [min(state[0] + 1, self.size - 1)]
         else:
-            return [(state[0] - 1) % self.size]
-            # return max(0, (state - 1))
+            #return [(state[0] - 1) % self.size]
+            return [max(0, (state[0] - 1))]
 
     def get_episodes(self):
         return self.episodes
@@ -59,7 +62,12 @@ class ArrayEnvironment:
     def reset(self):
         self.episodes += 1
         self.score = 0
-        self.position = [random.randint(0, self.size - 1)]
+        self.frames = 0
+
+        while True:
+            self.position = [random.randint(0, self.size - 1)]
+            if abs(self.position[0] - self.goal) > 3:
+                break
 
     def generate_test(self):
         states = []
@@ -71,10 +79,11 @@ class ArrayEnvironment:
         for state in range(self.size):
             for action in range(2):
                 states.append([state])
-                rewards.append(self.reward(state, action))
-                next_states.append([self.transition(state, action)])
+                rewards.append(self.reward([state], action))
+                next_states.append([self.transition([state], action)])
                 actions.append(action)
-                terminals.append(int(next_states[-1][0] == self.goal))
+
+                terminals.append(next_states[-1][0][0] == self.goal)
 
         return states, actions, rewards, next_states, terminals
 
@@ -87,6 +96,7 @@ class AtariEnvironment:
         self.score = 0
         self.episodes = 0
         self.terminal = False
+        self.frames = 0
         self.state = np.zeros((args.resize_width, args.resize_height), dtype=np.uint8)
         self.buffer = np.zeros((args.buffer_size, args.resize_height, args.resize_width), dtype=np.uint8)
         self.reset()
@@ -99,7 +109,7 @@ class AtariEnvironment:
 
     def act(self, action):
         total_reward = 0
-
+        self.frames += 1
         for _ in range(self.args.actions_per_tick):
             screen, reward, self.terminal, _ = self.env.step(action)
             total_reward += reward
@@ -137,6 +147,7 @@ class AtariEnvironment:
 
     def reset(self):
         self.episodes += 1
+        self.frames = 0
         self.env.reset()
 
         self.buffer.fill(0)

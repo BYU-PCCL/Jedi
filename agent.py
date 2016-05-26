@@ -35,55 +35,31 @@ class Agent:
         states, actions, rewards, next_states, terminals = self.memory.sample()
         tderror, loss = self.network.train(states, actions, terminals, next_states, rewards)
 
+        # for i, _ in enumerate(states):
+        #     print states[i], actions[i], next_states[i], rewards[i], terminals[i]
+
         # ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.environment.generate_test()
         #
-        # self.memory = []
+        # self.memory = Memory(self.args, self.environment)
         # priorities = []
         # for i, s in enumerate(ideal_states):
-        #     self.memory.append([ideal_states[i][0], ideal_rewards[i], ideal_actions[i], ideal_terminals[i],
-        #                         ideal_next_states[i][0]])
+        #     print ideal_states[i], ideal_actions[i], ideal_rewards[i], ideal_next_states[i], ideal_terminals[i]
+        #     self.memory.add(np.array(ideal_states[i]), ideal_rewards[i], ideal_actions[i], ideal_terminals[i])
         #     priorities.append(100.0)
         #
         # priorities = np.array(priorities)
         #
-        # print self.network.q([state for i, state in enumerate(ideal_states) if ideal_actions[i] == 0])[1]
+        # for tmp in range(3000):
+        #     states, actions, rewards, next_states, terminals = self.memory.sample()
+        #     next_states = np.array([self.environment.transition(state, actions[i]) for i, state in enumerate(states)])
         #
-        # non_terminal_trains = 0
-        # non_terminal_trains_per_n = [0]
-        # tmp_iterations = 3000
-        # for tmp in range(tmp_iterations):
-        #     states = []
-        #     next_states = []
-        #     actions = []
-        #     terminals = []
-        #     rewards = []
-        #     indicies = []
+        #     tderror, total_loss = self.network.train(states, actions, terminals, next_states, rewards)
         #
-        #     for _ in range(self.args.batch_size):
-        #         i = np.random.choice(len(self.memory), p=priorities / np.sum(priorities))
-        #         experience = self.memory[i]
-        #         #next_experience = self.memory[i + 1]
-        #
-        #         states.append([experience[0]])
-        #         rewards.append(experience[1])
-        #         actions.append(experience[2])
-        #         terminals.append(experience[3])
-        #         next_states.append([experience[4]])
-        #         indicies.append(i)
-        #
-        #         if not terminals[-1]:
-        #             non_terminal_trains += 1
-        #
-        #     if tmp % 50 == 0:
-        #         non_terminal_trains_per_n.append(non_terminal_trains - non_terminal_trains_per_n[-1])
-        #
-        #     tderror, total_loss = self.network.train(ideal_states, ideal_actions, ideal_terminals, ideal_next_states, ideal_rewards)
-        #
-        #     policy = self.network.q([state for i, state in enumerate(ideal_states) if ideal_actions[i] == 0])[0]
+        #     policy = self.network.q([[state] for i, state in enumerate(ideal_states) if ideal_actions[i] == 0])[0]
         #
         #     print "Iteration:{:>5} Loss:{:>10.5}      Policy:{}".format(tmp, total_loss, "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)))
         #
-        #     self.monitor.visualize_qs()
+        #     #self.monitor.visualize_qs()
         #
         #     # for i, error in enumerate(tderror):
         #     #     priorities[i] = error ** 2

@@ -5,6 +5,8 @@ class Network():
         self.args = args
         self.environment = environment
         self.training_iterations = 0
+        self.batch_loss = 0
+        self.lr = 0
         self.default_initializer = 'normal'
 
         tf.set_random_seed(args.random_seed)
@@ -143,10 +145,10 @@ class Network():
             self.reward: rewards,
             self.next_q: self.sess.run(self.q_max, feed_dict={self.state: next_states})
         }
-        _, self.training_iterations, delta, loss, lr = self.sess.run(
+        _, self.training_iterations, delta, self.batch_loss, self.lr = self.sess.run(
             [self.optimizer, self.global_step, self.delta, self.loss, self.learning_rate], feed_dict=data)
 
-        return delta, loss
+        return delta, self.batch_loss
 
 
 class Baseline(Network):
@@ -154,9 +156,9 @@ class Baseline(Network):
         Network.__init__(self, args, environment)
 
         # Build Network
-        self.conv1, w1, b1 = self.conv2d(self.state, size=8, filters=16, stride=4, name='conv1')
-        self.conv2, w2, b2 = self.conv2d(self.conv1, size=4, filters=32, stride=2, name='conv2')
-        self.fc3, w3, b3 = self.linear(self.flatten(self.conv2), 256, name='fc3')
+        self.conv1,  w1, b1 = self.conv2d(self.state, size=8, filters=16, stride=4, name='conv1')
+        self.conv2,  w2, b2 = self.conv2d(self.conv1, size=4, filters=32, stride=2, name='conv2')
+        self.fc3,    w3, b3 = self.linear(self.flatten(self.conv2), 256, name='fc3')
         self.output, w4, b4 = self.linear(self.fc3, environment.get_num_actions(), activation_fn=None, name='output')
 
         self.post_init()
@@ -165,8 +167,8 @@ class Linear(Network):
     def __init__(self, args, environment):
         Network.__init__(self, args, environment)
 
-        self.fc1, w1, b1 = self.linear(self.flatten(self.state), 500, name='fc1')
-        self.fc2, w2, b2 = self.linear(self.fc1, 500, name='fc2')
+        self.fc1,    w1, b1 = self.linear(self.flatten(self.state), 500, name='fc1')
+        self.fc2,    w2, b2 = self.linear(self.fc1, 500, name='fc2')
         self.output, w2, b2 = self.linear(self.fc2, environment.get_num_actions(), activation_fn=None, name='output')
 
         self.post_init()
