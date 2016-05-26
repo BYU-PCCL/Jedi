@@ -5,9 +5,7 @@ class TrainTarget:
 
         self.args = args
 
-        tf.set_random_seed(args.random_seed)
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_fraction)
-        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+        self.sess = Type.create_session(args)
 
         self.target_network = Type(args, environment, 'target', self.sess)
         self.train_network = Type(args, environment, 'train', self.sess)
@@ -44,12 +42,7 @@ class Network():
         self.lr = 0
         self.default_initializer = 'normal'
 
-        if sess is None:
-            tf.set_random_seed(args.random_seed)
-            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_fraction)
-            self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-        else:
-            self.sess = sess
+        self.sess = self.create_session(args) if sess is None else sess
 
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
@@ -90,6 +83,12 @@ class Network():
 
         # Initialize
         self.initialize()
+
+    @staticmethod
+    def create_session(args):
+        tf.set_random_seed(args.random_seed)
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_fraction)
+        return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 
     def one_hot(self, source, size, name='onehot'):
         return tf.one_hot(source, size, 1.0, 0.0, name=self.name + '_' + name)
@@ -204,6 +203,7 @@ class Baseline(Network):
         self.output, w4, b4 = self.linear(self.fc3, environment.get_num_actions(), activation_fn=None, name='output')
 
         self.post_init()
+
 
 class Linear(Network):
     def __init__(self, args, environment, name='linear_network', sess=None):
