@@ -57,6 +57,8 @@ class Monitor:
 
         self.save_config(args)
 
+        self.policy_test = environment.generate_test()
+
     def initialize_visualization(self):
 
         self.args.vis = True
@@ -125,25 +127,35 @@ class Monitor:
             self.save_stat(key, stats[key]) if stats[key] != None else None
 
     def print_stats(self, stats, evaluation=False):
+
+        policy = ""
+        qs = [0.0]
+        if self.policy_test:
+            ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.policy_test
+            policy, qs = self.network.q([[state] for i, state in enumerate(ideal_states) if ideal_actions[i] == 0])
+            policy = "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy))
+
         episodes = (stats['max_episodes'] - stats['min_episodes'] + 1) if stats['max_episodes'] is not None else 0
-        print "  |  episodes: {:<5} max q: {:<14.10} max s: {:<4} min s: {:<4} lr: {:<14.7} eps: {:<10.5} eval: {}".format(
-                                                               episodes,
-                                                               stats['max_q'],
-                                                               stats['max_score'],
-                                                               stats['min_score'],
-                                                               stats['min_lr'],
-                                                               stats['min_epsilon'],
-                                                               evaluation)
+        print "  |  episodes: {:<5} " \
+              "max q: {:<14.10} " \
+              "score: {:>4} - {:<4}" \
+              "lr: {:<8.7} " \
+              "eps: {:<10.5} " \
+              "eval: {:<4} " \
+              "policy q: {:<9.4}" \
+              "policy: {}".format(episodes,
+                                  stats['max_q'],
+                                  stats['min_score'],
+                                  stats['max_score'],
+                                  stats['min_lr'],
+                                  stats['min_epsilon'],
+                                  evaluation,
+                                  np.max(qs),
+                                  policy)
+
 
     def monitor(self, state, reward, terminal, q_values, is_evaluate):
         self.iterations += 1
-
-        # ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.environment.generate_test()
-        # policy, qs = self.network.q([[state] for i, state in enumerate(ideal_states) if ideal_actions[i] == 0])
-        # print "\rPolicy:{}, maxqs:{}, minqs:{}".format(
-        #     "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)),
-        #     np.max(qs),
-        #     np.min(qs))
 
         if self.args.vis:
             cv2.imshow("preview", state)

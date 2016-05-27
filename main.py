@@ -68,3 +68,12 @@ for _ in tqdm(range(args.total_ticks), ncols=50):
 
 # TODO
 # Network Weight Visualizer
+# Add color to log messages (eval vs not)
+# Policy explorer for atari
+# learning rate annealer is broken
+# add git commit to args
+# reward clip
+# error clip
+# death ends episode
+# devsisters has a slightly deeper network
+# check the phi passed into the q value

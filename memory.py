@@ -80,4 +80,4 @@ class Memory:
         rewards = self.rewards[indexes]
         terminals = self.terminals[indexes]
 
-        return self.prestates, actions, rewards, self.poststates, terminals
+        return self.prestates.copy(), actions, rewards, self.poststates.copy(), terminals, indexes

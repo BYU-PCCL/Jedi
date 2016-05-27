@@ -5,6 +5,7 @@ import cv2
 
 class ArrayEnvironment:
     def __init__(self, args):
+        self.args = args
         self.size = 20
         self.goal = 4 #self.size // 2
         self.position = [0]
@@ -38,11 +39,11 @@ class ArrayEnvironment:
 
     def transition(self, state, action):
         if action == 1:
-            #return [(state[0] + 1) % self.size]
-            return [min(state[0] + 1, self.size - 1)]
+            return [(state[0] + 1) % self.size]
+            #return [min(state[0] + 1, self.size - 1)]
         else:
-            #return [(state[0] - 1) % self.size]
-            return [max(0, (state[0] - 1))]
+            return [(state[0] - 1) % self.size]
+            #return [max(0, (state[0] - 1))]
 
     def get_episodes(self):
         return self.episodes
@@ -57,7 +58,7 @@ class ArrayEnvironment:
         return self.size
 
     def get_terminal(self):
-        return self.position[0] == self.goal
+        return self.position[0] == self.goal or self.frames >= self.args.max_frames
 
     def reset(self):
         self.episodes += 1

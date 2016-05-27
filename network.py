@@ -2,14 +2,12 @@ import tensorflow as tf
 
 class TrainTarget:
     def __init__(self, Type, args, environment):
-
         self.args = args
-
         self.sess = Type.create_session(args)
-
         self.target_network = Type(args, environment, 'target', self.sess)
         self.train_network = Type(args, environment, 'train', self.sess)
         self.training_iterations = 0
+        self.lr = 0.0
 
         self.copy = [
             weight.assign(self.train_network.weights[i]) for i, weight in enumerate(self.target_network.weights)
@@ -24,13 +22,18 @@ class TrainTarget:
         return self.target_network.q(states)
 
     def train(self, states, actions, terminals, next_states, rewards):
-
-        self.training_iterations += 1
+        response = self.train_network.train(states, actions, terminals, next_states, rewards, self.target_network)
+        self.training_iterations = self.train_network.training_iterations
+        self.lr = self.train_network.lr
 
         if self.training_iterations % self.args.copy_frequency == 0:
             self.update()
 
-        return self.train_network.train(states, actions, terminals, next_states, rewards, self.target_network)
+        return response
+
+
+
+
 
 class Network():
     def __init__(self, args, environment, name='network', sess=None):
@@ -40,18 +43,17 @@ class Network():
         self.training_iterations = 0
         self.batch_loss = 0
         self.lr = 0
-        self.default_initializer = 'normal'
-
-        self.sess = self.create_session(args) if sess is None else sess
-
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        self.default_initializer = args.initializer
 
         self.weights = []
         self.biases = []
         self.activations = []
 
+        self.sess = self.create_session(args) if sess is None else sess
+
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
         self.state = self.float([None, args.phi_frames] + list(environment.get_state_space()), name=self.name + '_state') / float(environment.max_state_value())
-        self.default_initializer = args.initializer
+
 
     def post_init(self):
         self.next_q = self.float([None], name=self.name + '_next_q')
