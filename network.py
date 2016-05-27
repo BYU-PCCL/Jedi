@@ -212,7 +212,7 @@ class Baseline(Network):
         # Build Network
         self.conv1,  w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
         self.conv2,  w2, b2 = self.conv2d(self.conv1, size=4, filters=64, stride=2, name='conv2')
-        self.conv3,  w3, b3 = self.conv2d(self.conv1, size=3, filters=64, stride=1, name='conv3')
+        self.conv3,  w3, b3 = self.conv2d(self.conv2, size=3, filters=64, stride=1, name='conv3')
         self.fc4,    w4, b4 = self.linear(self.flatten(self.conv3), 512, name='fc4')
         self.output, w5, b5 = self.linear(self.fc4, environment.get_num_actions(), activation_fn='none', name='output')
 

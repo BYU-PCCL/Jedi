@@ -16,8 +16,8 @@ random.seed(args.random_seed)
 np.random.seed(args.random_seed)
 
 # Initialize
-environment = ArrayEnvironment(args)
-network = TrainTarget(Linear, args, environment)
+environment = AtariEnvironment(args)
+network = TrainTarget(Baseline, args, environment)
 agent = Agent(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
 
