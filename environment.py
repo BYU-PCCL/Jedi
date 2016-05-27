@@ -58,7 +58,7 @@ class ArrayEnvironment:
         return self.size
 
     def get_terminal(self):
-        return self.position[0] == self.goal or self.frames >= self.args.max_frames
+        return self.position[0] == self.goal or self.frames >= self.args.max_frames_per_episode
 
     def reset(self):
         self.episodes += 1

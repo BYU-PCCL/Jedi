@@ -16,8 +16,8 @@ random.seed(args.random_seed)
 np.random.seed(args.random_seed)
 
 # Initialize
-environment = AtariEnvironment(args)
-network = TrainTarget(Baseline, args, environment)
+environment = ArrayEnvironment(args)
+network = TrainTarget(Linear, args, environment)
 agent = Agent(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
 
@@ -31,7 +31,7 @@ eval_pending = False
 
 # Handle Ctrl + c
 def commander(signal, frame):
-    command = raw_input("\n\nCommand [args | eval | verbose | quiet]: ")
+    command = raw_input("\n\n {} Command [args | eval | verbose | quiet]: ".format(args.name))
     if command == "args":
         for key in sorted(vars(args)):
             print "{0:>40} : {1}".format(key, getattr(args, key))
@@ -47,10 +47,10 @@ def commander(signal, frame):
 signal.signal(signal.SIGINT, commander)
 
 # Main Loop
-for _ in tqdm(range(args.total_ticks), ncols=50):
+for tick in tqdm(range(args.total_ticks), ncols=50, mininterval=.001):
 
     # Determine if we should evaluate this episode or not
-    is_evaluate = (environment.get_episodes() + 1) % args.evaluate_frequency == 0 or force_eval
+    is_evaluate = (tick + 1) % args.evaluate_frequency == 0 or force_eval
 
     action, q_values = agent.get_action(state, is_evaluate)
     state, reward, terminal = environment.act(action)
@@ -68,12 +68,10 @@ for _ in tqdm(range(args.total_ticks), ncols=50):
 
 # TODO
 # Network Weight Visualizer
-# Add color to log messages (eval vs not)
 # Policy explorer for atari
 # learning rate annealer is broken
-# add git commit to args
-# reward clip
-# error clip
+
 # death ends episode
-# devsisters has a slightly deeper network
 # check the phi passed into the q value
+
+# if we prioritize -- do we prioritize based on delta, or clipped_delta?

@@ -1,5 +1,6 @@
 import argparse
 import random
+import subprocess
 
 class Parameters():
     def __init__(self):
@@ -20,8 +21,7 @@ class Parameters():
         harness_args.add_argument('--deterministic', action='store_const', const=True, default=False, help='set random seeds when appropriate')
         harness_args.add_argument('--random_seed', default=42, type=int, help='apply the weights training to target weights every n callstrains')
         harness_args.add_argument('--total_ticks', default=10000000, type=int, help='max iterations in main loop')
-        harness_args.add_argument('--evaluate_frequency', default=50, type=int, help='evaluate every n episodes')
-        harness_args.add_argument('--train_frequency', default=4, type=int, help='train every n frames')
+        harness_args.add_argument('--evaluate_frequency', default=10000, type=int, help='evaluate every n episodes')
         harness_args.add_argument('--console_frequency', default=1000, type=int, help='print every n iterations if verbose')
         harness_args.add_argument('--max_frames_per_episode', default=10000, type=int)
 
@@ -43,26 +43,36 @@ class Parameters():
         agent_args.add_argument('--exploration_epsilon_end', default=.1, type=float, help='the minimum exploration epsilon')
         agent_args.add_argument('--exploration_epsilon_decay', default=1000000, type=int, help='over how many calls to train should epsilon decay')
         agent_args.add_argument('--exploration_epsilon_evaluation', default=.05, type=int, help='over how many calls to train should epsilon decay')
+        agent_args.add_argument('--train_frequency', default=4, type=int, help='train every n frames')
 
 
         network_args = self.parser.add_argument_group('Network')
-        network_args.add_argument('--discount', default=.95, type=float, help='gamma, the discount rate')
-        network_args.add_argument('--learning_rate_start', default=0.00025, type=float, help='the learning rate')
-        network_args.add_argument('--learning_rate_end', default=0.00025, type=float, help='the learning rate')
-        network_args.add_argument('--learning_rate_decay', default=100000, type=float, help='the learning rate')
+        network_args.add_argument('--discount', default=.99, type=float, help='gamma, the discount rate')
+        network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
+        network_args.add_argument('--learning_rate_end', default=0.000000025, type=float)
+        network_args.add_argument('--learning_rate_decay', default=.96, type=float)
+        network_args.add_argument('--learning_rate_decay_step', default=100, type=float)
         network_args.add_argument('--initializer', default='truncated-normal', type=str, help='xavier | normal | truncated-normal | uniform')
         network_args.add_argument('--rms_eps', default=0.01, type=float, help='the epsilon for rmsprop')
         network_args.add_argument('--rms_decay', default=.90, type=float, help='the decay for rmsprop')
         network_args.add_argument('--rms_momentum', default=0.99, type=float, help='the momentum for rmsprop')
         network_args.add_argument('--gpu_fraction', default=.90, type=float, help='how much gpu to use')
+        network_args.add_argument('--target_network_alpha', default=1.0, type=float)
         network_args.add_argument('--copy_frequency', default=10000, type=int, help='copy to target every n trains')
+        network_args.add_argument('--clip_reward', default=True, type=bool)
+        network_args.add_argument('--clip_tderror', default=True, type=bool)
 
     def parse(self):
         args = self.parser.parse_args()
-
-        changed_args = [key + "=" + str(getattr(args, key)) for key in vars(args) if getattr(args, key) != self.parser.get_default(key)]
+        ignored_args = ['verbose', 'sql_host', 'sql_db', 'sql_port', 'sql_user', 'sql_password',
+                        'vis', 'name', 'total_ticks', 'evaluate_frequency']
+        changed_args = [key + "=" + str(getattr(args, key)) for key in vars(args) if key not in ignored_args and getattr(args, key) != self.parser.get_default(key)]
         changed_args = "-".join(changed_args) if len(changed_args) > 0 else "defaults"
         args.name = args.name + '-' + changed_args + '-' + str(random.randint(10000000, 99999999))
+
+        args.commit_hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip()
+        if subprocess.check_output(['git', 'status']).find("Changes not staged for commit") >= 0:
+            args.commit_hash += "-with-uncommited-changes"
 
         if args.deterministic:
             args.random_seed = 42

@@ -1,7 +1,6 @@
 """Code from https://github.com/tambetm/simple_dqn/blob/master/src/replay_memory.py"""
 import random
 import numpy as np
-from pqdict import maxpq, nlargest
 
 class Memory:
     def __init__(self, args, environment):
@@ -10,7 +9,6 @@ class Memory:
 
         self.actions = np.empty(args.replay_memory_size, dtype=np.uint8)
         self.rewards = np.empty(args.replay_memory_size, dtype=np.integer)
-        self.priorities = maxpq()
         self.screens = np.empty(tuple([args.replay_memory_size]) + self.dims, dtype=np.uint8)
         self.terminals = np.empty(args.replay_memory_size, dtype=np.bool)
 
@@ -24,7 +22,7 @@ class Memory:
     def get_recent(self):
         return self.get_state(self.count - 1)
 
-    def add(self, screen, reward, action, terminal, priority=1000):
+    def add(self, screen, reward, action, terminal):
         assert screen.shape == self.dims
         # NB! screen is post-state, after action and reward
         self.actions[self.current] = action

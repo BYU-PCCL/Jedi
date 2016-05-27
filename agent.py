@@ -22,7 +22,7 @@ class Agent:
 
     def get_action(self, state, is_evaluate):
         self.iterations += 1
-        if random.random() < (self.epsilon if not is_evaluate else self.args.exploration_epsilon_evaluation):
+        if random.random() <= (self.epsilon if not is_evaluate else self.args.exploration_epsilon_evaluation):
             return random.randint(0, self.num_actions - 1), None
         else:
             action, qs = self.network.q([self.memory.get_recent()])
@@ -31,9 +31,9 @@ class Agent:
     def after_action(self, state, reward, action, terminal, is_evaluate):
         if not is_evaluate:
             self.memory.add(state, reward, action, terminal)
-            self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
 
             if self.memory.can_sample() and self.iterations > self.args.iterations_before_training and self.iterations % self.args.train_frequency == 0:
+                self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
                 try:
                     self.training_queue.put(self.memory.sample(), timeout=1)
                 except Queue.Full:

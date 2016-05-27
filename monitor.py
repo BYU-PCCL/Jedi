@@ -3,6 +3,7 @@ from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph as pg
 import cv2
 import psycopg2
+from colorama import Fore, Style
 
 class Stats:
     def __init__(self):
@@ -26,6 +27,8 @@ class Stats:
         if key in self.list_stats:
             return {"max": np.max(self.list_stats[key]),
                     "min": np.min(self.list_stats[key])}[operator]
+
+        return 0.0
 
 
 class Monitor:
@@ -51,16 +54,17 @@ class Monitor:
                                      user=args.sql_user,
                                      password=args.sql_password)
         self.cur = self.conn.cursor()
+        self.save_config(args)
+
+        self.policy_test = environment.generate_test()
+        if self.policy_test:
+            ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.policy_test
+            self.ideal_states = [[state] for i, state in enumerate(ideal_states) if ideal_actions[i] == 0]
 
         if args.vis:
             self.initialize_visualization()
 
-        self.save_config(args)
-
-        self.policy_test = environment.generate_test()
-
     def initialize_visualization(self):
-
         self.args.vis = True
 
         # State Visualizer
@@ -69,18 +73,17 @@ class Monitor:
 
         # QT and CV2 seem to dislike working together
         # Q-Value Visualizer
-        # self.test_data = self.environment.generate_test()
-        # if self.test_data:
-        #     self.history = np.zeros((len(self.test_data[0]), 500, self.environment.get_num_actions()))
+        # if self.policy_test:
+        #     self.history = np.zeros((len(self.ideal_states), 500, self.environment.get_num_actions()))
         #
         #     self.app = QtGui.QApplication([])
         #     self.q_win = pg.GraphicsWindow(title="Q Monitor")
         #     self.q_win.resize(1000, 1000)
         #     pg.setConfigOptions(antialias=True)
         #
-        #     if self.test_data is not None:
+        #     if self.policy_test is not None:
         #         self.q_plots = []
-        #         for i, _ in enumerate(self.test_data[0]):
+        #         for i, _ in enumerate(self.ideal_states):
         #             plot = self.q_win.addPlot()
         #             plot.hideAxis('bottom')
         #             plot.hideAxis('left')
@@ -110,7 +113,7 @@ class Monitor:
         self.args.vis = False
 
     def visualize_qs(self):
-        _, batch_qs = self.network.q(self.test_data[0])
+        policy, batch_qs = self.network.q(self.ideal_states)
 
         self.history[:, 0:-1, :] = self.history[:, 1:, :]
         self.history[:, -1, :] = batch_qs
@@ -128,30 +131,35 @@ class Monitor:
 
     def print_stats(self, stats, evaluation=False):
 
-        policy = ""
+        policy = "None"
         qs = [0.0]
         if self.policy_test:
-            ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.policy_test
-            policy, qs = self.network.q([[state] for i, state in enumerate(ideal_states) if ideal_actions[i] == 0])
+            policy, qs = self.network.q(self.ideal_states)
             policy = "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy))
 
-        episodes = (stats['max_episodes'] - stats['min_episodes'] + 1) if stats['max_episodes'] is not None else 0
-        print "  |  episodes: {:<5} " \
-              "max q: {:<14.10} " \
+        episodes = (stats['max_episodes'] - stats['min_episodes'] + 1.0) if stats['max_episodes'] is not None else 0
+
+        log = " |  episodes: {:<5} " \
+              "max q: {:<8.4f} " \
               "score: {:>4} - {:<4}" \
-              "lr: {:<8.7} " \
-              "eps: {:<10.5} " \
+              "lr: {:<8.7f} " \
+              "eps: {:<1.5} " \
               "eval: {:<4} " \
               "policy q: {:<9.4}" \
               "policy: {}".format(episodes,
-                                  stats['max_q'],
+                                  float(stats['max_q']) if stats['max_q'] is not None else 0.0,
                                   stats['min_score'],
                                   stats['max_score'],
                                   stats['min_lr'],
-                                  stats['min_epsilon'],
+                                  float(stats['min_epsilon']) if stats['min_epsilon'] is not None else 0.0,
                                   evaluation,
                                   np.max(qs),
                                   policy)
+
+        if evaluation:
+            print Fore.GREEN, log, Style.RESET_ALL
+        else:
+            print "", log
 
 
     def monitor(self, state, reward, terminal, q_values, is_evaluate):
@@ -159,6 +167,9 @@ class Monitor:
 
         if self.args.vis:
             cv2.imshow("preview", state)
+
+        # if self.iterations % 50 == 0:
+        #     self.visualize_qs()
 
         for stats in [self.console_stats, self.episode_stats]:
             stats.update('q', np.max(q_values))

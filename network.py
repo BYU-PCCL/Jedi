@@ -10,9 +10,11 @@ class TrainTarget:
         self.lr = 0.0
 
         self.copy = [
-            weight.assign(self.train_network.weights[i]) for i, weight in enumerate(self.target_network.weights)
+            weight.assign(args.target_network_alpha * self.train_network.weights[i] + (1.0 - args.target_network_alpha) * weight)
+                for i, weight in enumerate(self.target_network.weights)
         ] + [
-            bias.assign(self.train_network.biases[i]) for i, bias in enumerate(self.target_network.biases)
+            bias.assign(args.target_network_alpha * self.train_network.biases[i] + (1.0 - args.target_network_alpha) * bias)
+                for i, bias in enumerate(self.target_network.biases)
         ]
 
     def update(self):
@@ -30,9 +32,6 @@ class TrainTarget:
             self.update()
 
         return response
-
-
-
 
 
 class Network():
@@ -53,7 +52,7 @@ class Network():
 
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
         self.state = self.float([None, args.phi_frames] + list(environment.get_state_space()), name=self.name + '_state') / float(environment.max_state_value())
-
+        self.output = None
 
     def post_init(self):
         self.next_q = self.float([None], name=self.name + '_next_q')
@@ -65,23 +64,32 @@ class Network():
 
         self.action_one_hot = self.one_hot(self.action, self.environment.get_num_actions(), name=self.name + '_action')
         q_acted = self.sum(self.output * self.action_one_hot, name=self.name + '_q_acted')
-        target_q = self.reward + self.args.discount * (1.0 - self.terminal) * self.next_q
+
+        self.processed_reward = tf.clip_by_value(self.reward, -1.0, 1.0) if self.args.clip_reward else self.reward
+        target_q = self.processed_reward + self.args.discount * (1.0 - self.terminal) * self.next_q
 
         self.delta = target_q - q_acted
-        self.clipped_delta = self.delta  # tf.clip_by_value(self.delta, -1, 1, name='clipped_delta')
+        self.processed_delta = tf.clip_by_value(self.delta, -1.0, 1.0) if self.args.clip_tderror else self.delta
 
-        self.loss = self.sum(self.clipped_delta ** 2, idx=0, name=self.name + '_oss')
+        self.loss = tf.reduce_mean(tf.square(self.processed_delta), name=self.name + '_loss')
 
         # Learning Rate Calculation
-        self.learning_rate = self.linearly_anneal(self.args.learning_rate_start,
-                                                  self.args.learning_rate_end,
-                                                  self.args.learning_rate_decay,
-                                                  self.global_step)
+        # self.learning_rate = self.loss
+        #     tf.maximum(self.args.learning_rate_end,
+        #                       tf.train.exponential_decay(
+        #                           self.args.learning_rate_start,
+        #                           self.global_step,
+        #                           self.args.learning_rate_decay_step,
+        #                           self.args.learning_rate_decay,
+        #                           staircase=True))
+
+        self.learning_rate = tf.constant(self.args.learning_rate_start)
 
         self.optimizer = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate,
                                                    decay=self.args.rms_decay,
                                                    momentum=float(self.args.rms_momentum),
-                                                   epsilon=self.args.rms_eps).minimize(self.loss, global_step=self.global_step)
+                                                   epsilon=self.args.rms_eps).minimize(self.loss,
+                                                                                       global_step=self.global_step)
 
         # Initialize
         self.initialize()
@@ -119,13 +127,14 @@ class Network():
             'normal': tf.random_normal_initializer(stddev=stddev),
             'xavier': tf.contrib.layers.xavier_initializer(),
             'uniform': tf.random_uniform_initializer(),
-            'truncated-normal': tf.truncated_normal_initializer(stddev=stddev)
+            'truncated-normal': tf.truncated_normal_initializer(0, stddev=stddev)
         }[initializer if initializer != 'default' else self.default_initializer]
 
-    def linear(self, source, output_size, stddev=0.02, initializer='default', bias_start=0.01, activation_fn=tf.nn.relu, name='linear'):
+    def linear(self, source, output_size, stddev=0.02, initializer='default', bias_start=0.01, activation_fn='relu', name='linear'):
         shape = source.get_shape().as_list()
 
         initializer = self.parse_initializer(initializer, stddev)
+        activation_fn = tf.nn.relu if activation_fn == 'relu' else None
 
         with tf.variable_scope(name):
             w = tf.get_variable(self.name + '_matrix'+name, [shape[1], output_size], tf.float32,
@@ -142,9 +151,11 @@ class Network():
 
             return activated, w, b
 
-    def conv2d(self, source, size, filters, stride, padding='SAME', stddev=0.02, initializer='default', bias_start=0.01, activation_fn=tf.nn.relu, name='conv2d'):
+    def conv2d(self, source, size, filters, stride, padding='SAME', stddev=0.02, initializer='default', bias_start=0.01,
+               activation_fn='relu', name='conv2d'):
         shape = source.get_shape().as_list()
         initializer = self.parse_initializer(initializer, stddev)
+        activation_fn = tf.nn.relu if activation_fn == 'relu' else None
 
         w = tf.get_variable(self.name + '_weight_' + name, shape=[size, size, shape[1], filters], initializer=initializer)
         b = tf.Variable(tf.constant(bias_start, shape=[filters]), name=self.name + '_bias_' + name)
@@ -199,10 +210,11 @@ class Baseline(Network):
         Network.__init__(self, args, environment, name, sess)
 
         # Build Network
-        self.conv1,  w1, b1 = self.conv2d(self.state, size=8, filters=16, stride=4, name='conv1')
-        self.conv2,  w2, b2 = self.conv2d(self.conv1, size=4, filters=32, stride=2, name='conv2')
-        self.fc3,    w3, b3 = self.linear(self.flatten(self.conv2), 256, name='fc3')
-        self.output, w4, b4 = self.linear(self.fc3, environment.get_num_actions(), activation_fn=None, name='output')
+        self.conv1,  w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
+        self.conv2,  w2, b2 = self.conv2d(self.conv1, size=4, filters=64, stride=2, name='conv2')
+        self.conv3,  w3, b3 = self.conv2d(self.conv1, size=3, filters=64, stride=1, name='conv3')
+        self.fc4,    w4, b4 = self.linear(self.flatten(self.conv3), 512, name='fc4')
+        self.output, w5, b5 = self.linear(self.fc4, environment.get_num_actions(), activation_fn='none', name='output')
 
         self.post_init()
 
@@ -213,6 +225,6 @@ class Linear(Network):
 
         self.fc1,    w1, b1 = self.linear(self.flatten(self.state), 500, name='fc1')
         self.fc2,    w2, b2 = self.linear(self.fc1, 500, name='fc2')
-        self.output, w2, b2 = self.linear(self.fc2, environment.get_num_actions(), activation_fn=None, name='output')
+        self.output, w2, b2 = self.linear(self.fc2, environment.get_num_actions(), activation_fn='none', name='output')
 
         self.post_init()
