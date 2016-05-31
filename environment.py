@@ -7,7 +7,7 @@ class ArrayEnvironment:
     def __init__(self, args):
         self.args = args
         self.size = 20
-        self.goal = 4 #self.size // 2
+        self.goal = 4  # self.size // 2
         self.position = [0]
         self.episodes = 0
         self.score = 0
@@ -35,7 +35,7 @@ class ArrayEnvironment:
 
         if next_state[0] == self.goal:
             return 50
-        return 0 #abs(self.goal - state) - abs(self.goal - next_state)
+        return 0  # abs(self.goal - state) - abs(self.goal - next_state)
 
     def transition(self, state, action):
         if action == 1:
@@ -92,7 +92,7 @@ class ArrayEnvironment:
 class AtariEnvironment:
     def __init__(self, args):
         self.args = args
-        self.env = gym.make('Breakout-gray-v0')
+        self.env = gym.make('Breakout-v0')
 
         self.score = 0
         self.episodes = 0
@@ -118,7 +118,8 @@ class AtariEnvironment:
             if self.terminal:
                 break
 
-        self.state = cv2.resize(screen, (self.args.resize_width, self.args.resize_height))
+        self.terminal = self.terminal or self.frames >= self.args.max_frames_per_episode
+        self.state = cv2.resize(cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY), (self.args.resize_width, self.args.resize_height))
 
         # Roll the buffer
         # Add a resized, grayscale image to the buffer
@@ -157,7 +158,7 @@ class AtariEnvironment:
         self.score = 0
 
         if self.args.max_initial_noop > 0:
-            for _ in range(random.randint(0, self.args.max_initial_noop)):
+            for _ in range(random.randint(0, self.args.max_initial_noop // self.args.actions_per_tick)):
                 self.act(0)
 
     def generate_test(self):

@@ -1,3 +1,4 @@
+from __future__ import print_function
 from parameters import Parameters
 from agent import Agent
 from network import Linear, Baseline, TrainTarget
@@ -25,16 +26,15 @@ monitor = Monitor(args, environment, network, agent)
 state = environment.get_state()
 
 # Harness Variables
-force_eval = False
 eval_pending = False
-
+is_evaluate = False
 
 # Handle Ctrl + c
 def commander(signal, frame):
     command = raw_input("\n\n {} Command [args | eval | verbose | quiet]: ".format(args.name))
     if command == "args":
         for key in sorted(vars(args)):
-            print "{0:>40} : {1}".format(key, getattr(args, key))
+            print("{0:>40} : {1}".format(key, getattr(args, key)))
         raw_input("Press enter to continue.")
     elif command == "verbose":
         args.verbose = True
@@ -47,23 +47,27 @@ def commander(signal, frame):
 signal.signal(signal.SIGINT, commander)
 
 # Main Loop
-for tick in tqdm(range(args.total_ticks), ncols=50, mininterval=.001):
+for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=.001,
+                 bar_format='{percentage:3.0f}% | {bar} | {n_fmt} [{elapsed}, {rate_fmt}]'):
 
     # Determine if we should evaluate this episode or not
-    is_evaluate = (tick + 1) % args.evaluate_frequency == 0 or force_eval
+    is_evaluate = is_evaluate or ((tick + 1) % args.evaluate_frequency) == 0
+    is_evaluate = is_evaluate and tick > args.iterations_before_training
 
     action, q_values = agent.get_action(state, is_evaluate)
     state, reward, terminal = environment.act(action)
     agent.after_action(state, reward, action, terminal, is_evaluate)
 
     # Log stats and visualize
-    if args.verbose or is_evaluate:
+    if tick >= args.iterations_before_training:
         monitor.monitor(state, reward, terminal, q_values, is_evaluate)
+    elif tick == 0:
+        print("   ({} iterations before training)".format(args.iterations_before_training), end="")
 
     # Reset if needed
-    if terminal or environment.frames >= args.max_frames_per_episode:
-        eval_pending = False if is_evaluate else eval_pending
-        force_eval = eval_pending
+    if terminal:
+        is_evaluate = eval_pending
+        eval_pending = False
         environment.reset()
 
 # TODO
@@ -72,6 +76,6 @@ for tick in tqdm(range(args.total_ticks), ncols=50, mininterval=.001):
 # learning rate annealer is broken
 
 # death ends episode
-# check the phi passed into the q value
+# summary
 
 # if we prioritize -- do we prioritize based on delta, or clipped_delta?

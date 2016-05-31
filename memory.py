@@ -19,9 +19,6 @@ class Memory:
         self.prestates = np.empty((args.batch_size, args.phi_frames) + self.dims, dtype=np.uint8)
         self.poststates = np.empty((args.batch_size, args.phi_frames) + self.dims, dtype=np.uint8)
 
-    def get_recent(self):
-        return self.get_state(self.count - 1)
-
     def add(self, screen, reward, action, terminal):
         assert screen.shape == self.dims
         # NB! screen is post-state, after action and reward

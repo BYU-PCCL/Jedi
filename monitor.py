@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numpy as np
 from pyqtgraph.Qt import QtGui, QtCore
 import pyqtgraph as pg
@@ -38,10 +39,8 @@ class Monitor:
         self.network = network
         self.agent = agent
         self.iterations = 0
-        self.max_q = -99999
-        self.max_score = -99999
         self.score = 0
-        self.eval_stats = Stats()
+        self.eval_stats = None
         self.console_stats = Stats()
         self.episode_stats = Stats()
         self.commit_ready = False
@@ -137,29 +136,29 @@ class Monitor:
             policy, qs = self.network.q(self.ideal_states)
             policy = "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy))
 
-        episodes = (stats['max_episodes'] - stats['min_episodes'] + 1.0) if stats['max_episodes'] is not None else 0
-
-        log = " |  episodes: {:<5} " \
+        log = " |  episodes: {:<9} " \
               "max q: {:<8.4f} " \
-              "score: {:>4} - {:<4}" \
-              "lr: {:<8.7f} " \
-              "eps: {:<1.5} " \
-              "eval: {:<4} " \
-              "policy q: {:<9.4}" \
-              "policy: {}".format(episodes,
+              "score: {:>4} - {:<6}" \
+              "lr: {:<11.7f} " \
+              "eps: {:<9.5} " \
+              "eval: {:<3} " \
+              "policy q: {:<8.4}" \
+              "policy: {}".format(self.environment.get_episodes(),
                                   float(stats['max_q']) if stats['max_q'] is not None else 0.0,
                                   stats['min_score'],
                                   stats['max_score'],
-                                  stats['min_lr'],
-                                  float(stats['min_epsilon']) if stats['min_epsilon'] is not None else 0.0,
+                                  float(self.network.lr),
+                                  float(self.agent.epsilon),
                                   evaluation,
                                   np.max(qs),
                                   policy)
 
+        self.console_stats = Stats()
+
         if evaluation:
-            print Fore.GREEN, log, Style.RESET_ALL
+            print(Fore.GREEN, log, Style.RESET_ALL)
         else:
-            print "", log
+            print(" " + log, end="")
 
 
     def monitor(self, state, reward, terminal, q_values, is_evaluate):
@@ -171,26 +170,23 @@ class Monitor:
         # if self.iterations % 50 == 0:
         #     self.visualize_qs()
 
-        for stats in [self.console_stats, self.episode_stats]:
-            stats.update('q', np.max(q_values))
+        for stats in [self.console_stats, self.episode_stats, self.eval_stats]:
+            if stats is not None:
+                stats.update('q', np.max(q_values))
 
-            if terminal:
-                stats.update('score', self.environment.get_score())
-                stats.update('episodes', self.environment.get_episodes())
-                stats.update('lr', self.network.lr)
-                stats.update('epsilon', self.agent.epsilon)
+                if terminal:
+                    stats.update('score', self.environment.get_score())
 
         if is_evaluate:
-            self.console_stats = self.eval_stats
+            if self.eval_stats is None:
+                self.eval_stats = Stats()
 
             if terminal:
-                self.print_stats(self.console_stats, True)
-                self.eval_stats = Stats()
-                self.console_stats = Stats()
+                self.print_stats(self.eval_stats, True)
+                self.eval_stats = None
 
-        elif self.iterations % self.args.console_frequency == 0:
+        elif self.iterations % self.args.console_frequency == 1:
             self.print_stats(self.console_stats)
-            self.console_stats = Stats()
             self.commit()
 
         if terminal:
