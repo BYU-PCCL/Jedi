@@ -92,7 +92,7 @@ class ArrayEnvironment:
 class AtariEnvironment:
     def __init__(self, args):
         self.args = args
-        self.env = gym.make('Breakout-v0')
+        self.env = gym.make('Breakout-gray-v0')
 
         self.score = 0
         self.episodes = 0
@@ -119,7 +119,8 @@ class AtariEnvironment:
                 break
 
         self.terminal = self.terminal or self.frames >= self.args.max_frames_per_episode
-        self.state = cv2.resize(cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY), (self.args.resize_width, self.args.resize_height))
+        self.state = cv2.resize(screen, (self.args.resize_width, self.args.resize_height))
+        # cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY)
 
         # Roll the buffer
         # Add a resized, grayscale image to the buffer

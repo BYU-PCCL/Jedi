@@ -1,6 +1,7 @@
 import argparse
 import random
 import subprocess
+import network
 
 class Parameters():
     def __init__(self):
@@ -13,7 +14,6 @@ class Parameters():
         sql_args.add_argument('--sql_user', default="postgres")
         sql_args.add_argument('--sql_password', default="beware the pccl", type=str)
 
-
         harness_args = self.parser.add_argument_group('Harness')
         harness_args.add_argument('--vis', action='store_const', const=True, default=False)
         harness_args.add_argument('--name', default="learner")
@@ -25,7 +25,6 @@ class Parameters():
         harness_args.add_argument('--console_frequency', default=1000, type=int, help='in ticks')
         harness_args.add_argument('--max_frames_per_episode', default=10000, type=int)
 
-
         environment_args = self.parser.add_argument_group('Environment')
         environment_args.add_argument('--actions_per_tick', default=1, type=int)
         environment_args.add_argument('--rom', default="breakout")
@@ -33,7 +32,6 @@ class Parameters():
         environment_args.add_argument('--resize_width', default=84, type=int)
         environment_args.add_argument('--resize_height', default=84, type=int)
         environment_args.add_argument('--buffer_size', default=2, type=int, help='number of frames to max')
-
 
         agent_args = self.parser.add_argument_group('Agent')
         agent_args.add_argument('--phi_frames', default=4, type=int)
@@ -46,13 +44,13 @@ class Parameters():
         agent_args.add_argument('--train_frequency', default=3, type=int, help='in ticks')
         agent_args.add_argument('--threads', default=4, type=int, help='in ticks')
 
-
         network_args = self.parser.add_argument_group('Network')
+        network_args.add_argument('--network_type', default='baseline', type=str, help='baseline | linear')
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.000025, type=float)
         network_args.add_argument('--learning_rate_decay', default=.96, type=float)
-        network_args.add_argument('--learning_rate_decay_step', default=100, type=float)
+        network_args.add_argument('--learning_rate_decay_step', default=1000000, type=float)
         network_args.add_argument('--initializer', default='truncated-normal', type=str, help='xavier | normal | truncated-normal | uniform')
         network_args.add_argument('--rms_eps', default=0.01, type=float)
         network_args.add_argument('--rms_decay', default=.90, type=float)
@@ -62,6 +60,7 @@ class Parameters():
         network_args.add_argument('--copy_frequency', default=2500, type=int, help='in calls to train')
         network_args.add_argument('--clip_reward', default=True, type=bool)
         network_args.add_argument('--clip_tderror', default=True, type=bool)
+        network_args.add_argument('--tf_summary_path', default="/tmp/network", type=str)
 
     def parse(self):
         args = self.parser.parse_args()
@@ -71,11 +70,14 @@ class Parameters():
         changed_args = "-".join(changed_args) if len(changed_args) > 0 else "defaults"
         args.name = args.name + '-' + changed_args + '-' + str(random.randint(10000000, 99999999))
 
+        args.network_type = self.parse_network_type(args.network_type)
+
         try:
             args.commit_hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip()
             if subprocess.check_output(['git', 'status']).find("Changes not staged for commit") >= 0:
                 args.commit_hash += "-with-uncommited-changes"
         except:
+            args.commit_hash = 'no-git'
             pass
 
         if args.deterministic:
@@ -85,40 +87,20 @@ class Parameters():
 
         return args
 
-# # environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')
-# environment_args.add_argument('--negative_reward_on_death', action='store_const', const=True, default=False, help='load network and agent')
+    def parse_network_type(self, network_string):
+        return {'baseline': network.Baseline,
+                'linear': network.Linear,
+                'constrained': network.Constrained}[network_string]
 
-#harness_args.add_argument('--evaluate_episode_frequency', default=100, type=int, help='evaluate every n episodes')
-#harness_args.add_argument('--save_tick_frequency', default=-1, type=int, help='save every n frames')
-#harness_args.add_argument('--save_episode_frequency', default=-1, type=int, help='save every n episodes')
-#harness_args.add_argument('--console_tick_frequency', default=100, type=int, help='print to screen every n frames')
-#harness_args.add_argument('--max_episodes', default=-1, type=int, help='train for n episodes (-1 is infinite)')
-#harness_args.add_argument('--max_ticks', default=100000, type=int, help='maximum ticks allowed per episode (-1 is infinite)')
+
+#environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')
+#environment_args.add_argument('--negative_reward_on_death', action='store_const', const=True, default=False, help='load network and agent')
+
 #harness_args.add_argument('--load_checkpoint', action='store_const', const=True, default=False, help='load network and agent')
-#harness_args.add_argument('--evaluation_repetition', default=5, type=int, help='number of evaluations to average')
 
-
-#agent_args.add_argument('--training_iterations', default=1, type=float, help='number of times to train per frame')
-#agent_args.add_argument('--training_frequency', default=1, type=float, help='train every n frames')
-#agent_args.add_argument('--use_after_state', action='store_const', const=True, default=False, help='use the after state in memory experiences')
-#agent_args.add_argument('--exploration_epsilon_testing', default=.05, type=float, help='the exploration epsilon used during evaluations')
 #agent_args.add_argument('--priority_epsilon', default=.05, type=float, help='the epsilon associated with h2 priority')
 #agent_args.add_argument('--prioritization_type', default="uniform", help='uniform, h0, h1, or h2')
 #agent_args.add_argument('--clear_priority_frequency', default=0, type=int, help='how often to reset priorities')
 
-
-#network_args.add_argument('--network_type', default="baseline", help='baseline, baseline_two, constrained, deep or shallow')
-#network_args.add_argument('--clip_delta', action='store_const', const=True, default=False, help='use the fancy clipping method')
-#network_args.add_argument('--clip_delta_value', action='store_const', const=True, default=False, help='use the not fancy clipping method')
-#network_args.add_argument('--copy_frequency', default=10000, type=int, help='apply the weights training to target weights every n callstrains')
 #network_args.add_argument('--lookahead', default=5, type=int, help='the number of frames to look ahead when constraining')
 #network_args.add_argument('--constrained_lambda', default=1.0, type=float, help='the lambda used for constrained networks (ignored if network_type is not constrained)')
-#network_args.add_argument('--constrained_use_priorities', action='store_const', const=True, default=False, help='use priorities if network_type is constrained')
-#network_args.add_argument('--weight_initialization_stdev', default=0.01, type=float, help='the random normal stdev for weight initialization')
-#network_args.add_argument('--use_nature_values', action='store_const', const=True, default=False, help='set all parameters to nature paper values')
-#network_args.add_argument('--m3', action='store_const', const=True, default=False, help='devsisters m3 model')
-#network_args.add_argument('--m4', action='store_const', const=True, default=False, help='devsisters m4 model')
-#network_args.add_argument('--learning_rate_end', default=.0002, type=float, help='the learning rate')
-#network_args.add_argument('--learning_rate_decay', default=100000, type=float, help='the learning rate')
-#network_args.add_argument('--accumulator', default="mean", type=str, help='mean or sum')
-

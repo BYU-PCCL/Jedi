@@ -1,7 +1,7 @@
 from __future__ import print_function
 from parameters import Parameters
 from agent import Agent
-from network import Linear, Baseline, TrainTarget
+from network import TrainTarget
 from environment import ArrayEnvironment, AtariEnvironment
 from monitor import Monitor
 from tqdm import tqdm
@@ -18,7 +18,7 @@ np.random.seed(args.random_seed)
 
 # Initialize
 environment = AtariEnvironment(args)
-network = TrainTarget(Baseline, args, environment)
+network = TrainTarget(args.network_type, args, environment)
 agent = Agent(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
 
