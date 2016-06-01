@@ -143,7 +143,7 @@ class Monitor:
 
         log = " |  episodes: {:<8} " \
               "max q: {:<8.4f} " \
-              "score: [{:>4}, {:<6}]" \
+              "score: [{:>4},{:<4}]  " \
               "lr: {:<11.7f} " \
               "eps: {:<9.5} " \
               "loss: {:<10.6f} " \
