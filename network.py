@@ -311,7 +311,7 @@ class MDN(Network):
         return tf.reduce_mean(tf.log(sigma) + tf.square(prediction - truth) / (2.0 * tf.square(sigma)))
 
 
-class Casual(Network):
+class Causal(Network):
     def __init__(self, args, environment, name='baseline_network', sess=None):
         with tf.variable_scope(name) as scope:
             Network.__init__(self, args, environment, name, sess)
