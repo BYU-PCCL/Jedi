@@ -72,7 +72,6 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=
 
 # TODO
 # HIGH
-# causal network
 # convergance training
 # add prioritization
 

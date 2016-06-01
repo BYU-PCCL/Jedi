@@ -140,6 +140,10 @@ class Network():
         with tf.variable_scope(name + "_flatten"):
             return tf.reshape(source, [-1, dim], name=name)
 
+    def expand(self, source, dim, name='expand'):
+        with tf.variable_scope(name + "_expand"):
+            return tf.expand_dims(source, dim)
+
     def merge(self, left, right, idx=1, name='merge'):
         with tf.variable_scope(name + "_merge"):
             return tf.concat(idx, [left, right])
@@ -306,23 +310,29 @@ class MDN(Network):
         sigma = self.sum(self.variance * self.action_one_hot, name='variance_acted') + 0.001
         return tf.reduce_mean(tf.log(sigma) + tf.square(prediction - truth) / (2.0 * tf.square(sigma)))
 
+
 class Casual(Network):
     def __init__(self, args, environment, name='baseline_network', sess=None):
         with tf.variable_scope(name) as scope:
             Network.__init__(self, args, environment, name, sess)
 
-            # Build Network
-            self.conv1,  w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
+            # Common Perception
+            self.l1,  w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
 
-            self.a_conv2,  w2, b2 = self.conv2d(self.conv1, size=4, filters=64, stride=2, name='conv2')
-            self.fc4, w4, b4 = self.linear(self.flatten(self.conv3, name="fc4"), 512, name='fc4')
+            # A Side
+            self.l2a,  w2, b2 = self.conv2d(self.l1, size=4, filters=64, stride=2, name='a_conv2')
+            self.l2a_fc, w3, b3 = self.linear(self.flatten(self.l2a, name="a_fc4"), 32, activation_fn='none', name='a_fc3')
 
-            self.b_conv2, w3, b3 = self.conv2d(self.conv1, size=4, filters=64, stride=2, name='conv2')
-            self.fc4, w4, b4 = self.linear(self.flatten(self.conv3, name="fc4"), 512, name='fc4')
+            # B Side
+            self.l2b, w4, b4 = self.conv2d(self.l1, size=4, filters=64, stride=2, name='b_conv2')
+            self.l2b_fc, w5, b5 = self.linear(self.flatten(self.l2b, name="b_fc4"), 32, activation_fn='none', name='b_fc3')
 
+            # Causal Matrix
+            self.l2a_fc_e = self.expand(self.l2a_fc, 2, name='a')  # now ?x32x1
+            self.l2b_fc_e = self.expand(self.l2b_fc, 1, name='b')  # now ?x1x32
+            self.causes = self.flatten(tf.batch_matmul(self.l2a_fc_e, self.l2b_fc_e, name='causes'))
 
-            self.conv3,  w3, b3 = self.conv2d(self.conv2, size=3, filters=64, stride=1, name='conv3')
-
-            self.output, w5, b5 = self.linear(self.fc4, environment.get_num_actions(), activation_fn='none', name='output')
+            self.l4, w6, b6 = self.linear(self.causes, 512, name='l4')
+            self.output, w5, b5 = self.linear(self.l4, environment.get_num_actions(), activation_fn='none', name='output')
 
             self.post_init()
