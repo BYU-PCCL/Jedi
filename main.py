@@ -18,8 +18,8 @@ np.random.seed(args.random_seed)
 
 # Initialize
 environment = AtariEnvironment(args)
-network = TrainTarget(args.network_type, args, environment)
-agent = Agent(args, environment, network)
+network = TrainTarget(args.network_class, args, environment)
+agent = args.agent_class(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
 
 # Get initial state
@@ -71,6 +71,18 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=
         environment.reset()
 
 # TODO
+# HIGH
+# causal network
+# convergance training
+# add prioritization
+
+# MEDIUM
 # death ends episode
+# negative reward on death
+# add constrained
+
+# LOW
+# add checkpoints
+# add gray to custom gym
 
 # if we prioritize -- do we prioritize based on delta, or clipped_delta?

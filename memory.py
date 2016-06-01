@@ -18,6 +18,10 @@ class Memory:
         # pre-allocate prestates and poststates for minibatch
         self.prestates = np.empty((args.batch_size, args.phi_frames) + self.dims, dtype=np.uint8)
         self.poststates = np.empty((args.batch_size, args.phi_frames) + self.dims, dtype=np.uint8)
+        self.lookaheads = np.empty((args.batch_size, args.phi_frames) + self.dims, dtype=np.uint8)
+        self.void_phi = np.zeros(tuple([args.phi_frames]) + self.dims, dtype=np.uint8)
+
+        # start a thread
 
     def add(self, screen, reward, action, terminal):
         assert screen.shape == self.dims
@@ -69,13 +73,17 @@ class Memory:
             # NB! having index first is fastest in C-order matrices
             self.prestates[len(indexes), ...] = self.get_state(index - 1)
             self.poststates[len(indexes), ...] = self.get_state(index)
+
+            # if lookahead spans into the next episode, void it
+            if self.terminals[index:index + self.args.lookahead].any():
+                self.lookaheads[len(indexes), ...] = self.void_phi
+            else:
+                self.lookaheads[len(indexes), ...] = self.get_state(index + self.args.lookahead)
+
             indexes.append(index)
 
         actions = self.actions[indexes]
         rewards = self.rewards[indexes]
         terminals = self.terminals[indexes]
 
-        # todo: obviously not a real lookahead
-        lookaheads = self.poststates.copy()
-
-        return self.prestates.copy(), actions, rewards, self.poststates.copy(), terminals, lookaheads, indexes
+        return self.prestates.copy(), actions, rewards, self.poststates.copy(), terminals, self.lookaheads.copy(), indexes

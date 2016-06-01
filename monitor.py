@@ -141,9 +141,9 @@ class Monitor:
             policy, qs = self.network.q(self.ideal_states)
             policy = "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy))
 
-        log = " |  episodes: {:<8} " \
+        log = " |  episodes: {}  " \
               "max q: {:<8.4f} " \
-              "score: [{:>4},{:<4}]  " \
+              "score: [{:>2g},{:<2g}]  " \
               "lr: {:<11.7f} " \
               "eps: {:<9.5} " \
               "loss: {:<10.6f} " \

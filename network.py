@@ -77,8 +77,8 @@ class Network():
     def __len__(self):
         return sum([sum([reduce(lambda x, y: x * y, l.get_shape().as_list()) for l in e]) for e in [self.weights, self.biases]])
 
-    def get_loss(self, q_error):
-        return tf.reduce_mean(tf.square(q_error), name='loss')
+    def get_loss(self, processed_delta, prediction, truth):
+        return tf.reduce_mean(tf.square(processed_delta), name='loss')
 
     def post_init(self):
         with tf.name_scope('output') as scope:
@@ -94,7 +94,7 @@ class Network():
             self.processed_delta = tf.clip_by_value(self.delta, -1.0, 1.0) if self.args.clip_tderror else self.delta
 
         with tf.name_scope('loss') as scope:
-            self.loss = self.get_loss(self.processed_delta)
+            self.loss = self.get_loss(self.delta, truth=target_q, prediction=q_acted)
 
         with tf.name_scope('learning_rate') as scope:
             # Learning Rate Calculation
@@ -117,10 +117,11 @@ class Network():
         self.sess.run(tf.initialize_all_variables())
         tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
 
+
     @staticmethod
     def create_session(args):
         tf.set_random_seed(args.random_seed)
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_fraction)
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_fraction, allow_growth=True)
         return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 
     def one_hot(self, source, size, name='onehot'):
@@ -229,7 +230,6 @@ class Network():
 
         return delta, self.batch_loss
 
-
 class Baseline(Network):
     def __init__(self, args, environment, name='baseline_network', sess=None):
         with tf.variable_scope(name) as scope:
@@ -283,6 +283,46 @@ class Constrained(Network):
 
             self.post_init()
 
-    def get_loss(self, q_error):
-        return tf.reduce_mean(tf.square(q_error)) + tf.reduce_mean(self.constraint_error)
+    def get_loss(self, processed_delta, prediction, truth):
+        return tf.reduce_mean(tf.square(processed_delta)) + tf.reduce_mean(self.constraint_error)
 
+
+class MDN(Network):
+    def __init__(self, args, environment, name='mdn_network', sess=None):
+        with tf.variable_scope(name) as scope:
+            Network.__init__(self, args, environment, name, sess)
+
+            # Build Network
+            self.conv1,  w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
+            self.conv2,  w2, b2 = self.conv2d(self.conv1, size=4, filters=64, stride=2, name='conv2')
+            self.conv3,  w3, b3 = self.conv2d(self.conv2, size=3, filters=64, stride=1, name='conv3')
+            self.fc4,    w4, b4 = self.linear(self.flatten(self.conv3, name="fc4"), 512, name='fc4')
+            self.output, w5, b5 = self.linear(self.fc4, environment.get_num_actions(), activation_fn='none', name='output')
+            self.variance, w6, b6 = self.linear(self.fc4, environment.get_num_actions(), name='variance')
+
+            self.post_init()
+
+    def get_loss(self, processed_delta, prediction, truth):
+        sigma = self.sum(self.variance * self.action_one_hot, name='variance_acted') + 0.001
+        return tf.reduce_mean(tf.log(sigma) + tf.square(prediction - truth) / (2.0 * tf.square(sigma)))
+
+class Casual(Network):
+    def __init__(self, args, environment, name='baseline_network', sess=None):
+        with tf.variable_scope(name) as scope:
+            Network.__init__(self, args, environment, name, sess)
+
+            # Build Network
+            self.conv1,  w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
+
+            self.a_conv2,  w2, b2 = self.conv2d(self.conv1, size=4, filters=64, stride=2, name='conv2')
+            self.fc4, w4, b4 = self.linear(self.flatten(self.conv3, name="fc4"), 512, name='fc4')
+
+            self.b_conv2, w3, b3 = self.conv2d(self.conv1, size=4, filters=64, stride=2, name='conv2')
+            self.fc4, w4, b4 = self.linear(self.flatten(self.conv3, name="fc4"), 512, name='fc4')
+
+
+            self.conv3,  w3, b3 = self.conv2d(self.conv2, size=3, filters=64, stride=1, name='conv3')
+
+            self.output, w5, b5 = self.linear(self.fc4, environment.get_num_actions(), activation_fn='none', name='output')
+
+            self.post_init()

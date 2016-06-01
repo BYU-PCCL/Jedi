@@ -4,6 +4,7 @@ import numpy as np
 from memory import Memory
 import Queue
 from threading import Thread
+import time
 
 class Agent:
     def __init__(self, args, environment, network):
@@ -15,6 +16,7 @@ class Agent:
         self.epsilon = 1
         self.iterations = 0
         self.training_queue = Queue.Queue(maxsize=args.threads)
+        self.ready_queue = Queue.Queue(maxsize=args.threads)
 
         self.phi = np.zeros([args.phi_frames, args.resize_height, args.resize_width], dtype=np.uint8)
 
@@ -23,6 +25,11 @@ class Agent:
             self.threads.append(Thread(target=self.train))
             self.threads[-1].setDaemon(True)
             self.threads[-1].start()
+            self.ready_queue.put(True)
+
+        self.sample_thread = Thread(target=self.generate_samples)
+        self.sample_thread.setDaemon(True)
+        self.sample_thread.start()
 
     def get_action(self, state, is_evaluate):
         self.iterations += 1
@@ -39,19 +46,35 @@ class Agent:
         if not is_evaluate:
             self.memory.add(state, reward, action, terminal)
 
-            if self.memory.can_sample() and self.iterations > self.args.iterations_before_training and self.iterations % self.args.train_frequency == 0:
+            if self.iterations > self.args.iterations_before_training and self.iterations % self.args.train_frequency == 0:
                 self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
-                try:
-                    self.training_queue.put(self.memory.sample(), timeout=1)
-                except Queue.Full:
-                    pass
+                self.ready_queue.get()  # Wait for training to finish
+
+    def generate_samples(self):
+        while True:
+            if self.memory.can_sample():
+                self.training_queue.put(self.memory.sample())
 
     def train(self):
         while True:
-            try:
-                states, actions, rewards, next_states, terminals, lookaheads, idx = self.training_queue.get(timeout=1)
-                tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
-            except Queue.Empty:
-                # Catching an empty exception feels safer than using no timeout
-                # but I'm not sure if it's strictly necessary
-                pass
+            states, actions, rewards, next_states, terminals, lookaheads, idx = self.training_queue.get(timeout=1)
+            tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
+            self.ready_queue.put(True)  # Notify main thread a training has complete
+
+class QExplorer(Agent):
+    def __init__(self, args, environment, network):
+        Agent.__init__(self, args, environment, network)
+
+    def get_action(self, state, is_evaluate):
+        self.iterations += 1
+
+        action, qs = self.network.q([self.phi])
+        qprob = qs[0] - np.min(qs[0])
+        qprob += np.mean(qprob)  # ensures everyone has some chance of being selected
+        qprob = qprob / np.sum(qprob)
+
+        return np.random.choice(self.num_actions, p=qprob), qs[0]
+
+class MDNExplorer(Agent):
+    def __init__(self, args, environment, network):
+        Agent.__init__(self, args, environment, network)

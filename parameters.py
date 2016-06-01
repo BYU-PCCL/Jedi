@@ -2,6 +2,7 @@ import argparse
 import random
 import subprocess
 import network
+import agent
 
 class Parameters():
     def __init__(self):
@@ -34,6 +35,7 @@ class Parameters():
         environment_args.add_argument('--buffer_size', default=2, type=int, help='number of frames to max')
 
         agent_args = self.parser.add_argument_group('Agent')
+        agent_args.add_argument('--agent_type', default='agent', type=str, choices=['agent', 'qexplorer', 'mdnexplorer'])
         agent_args.add_argument('--phi_frames', default=4, type=int)
         agent_args.add_argument('--replay_memory_size', default=1000000, type=int)
         agent_args.add_argument('--batch_size', default=32, type=int)
@@ -41,17 +43,18 @@ class Parameters():
         agent_args.add_argument('--exploration_epsilon_end', default=.1, type=float)
         agent_args.add_argument('--exploration_epsilon_decay', default=1000000, type=int, help='in calls to train')
         agent_args.add_argument('--exploration_epsilon_evaluation', default=.05, type=int, help='epsilon for evaluation')
-        agent_args.add_argument('--train_frequency', default=3, type=int, help='in ticks')
-        agent_args.add_argument('--threads', default=4, type=int, help='in ticks')
+        agent_args.add_argument('--train_frequency', default=4, type=int, help='in ticks')
+        agent_args.add_argument('--threads', default=4, type=int)
+        agent_args.add_argument('--lookahead', default=10, type=int, help='in frames')
 
         network_args = self.parser.add_argument_group('Network')
-        network_args.add_argument('--network_type', default='baseline', type=str, help='baseline | linear')
+        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'mdn'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
-        network_args.add_argument('--learning_rate_end', default=0.000025, type=float)
+        network_args.add_argument('--learning_rate_end', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_decay', default=.96, type=float)
         network_args.add_argument('--learning_rate_decay_step', default=50000, type=float)
-        network_args.add_argument('--initializer', default='truncated-normal', type=str, help='xavier | normal | truncated-normal | uniform')
+        network_args.add_argument('--initializer', default='truncated-normal', type=str, choices=['xavier', 'normal', 'truncated-normal', 'uniform'])
         network_args.add_argument('--rms_eps', default=0.01, type=float)
         network_args.add_argument('--rms_decay', default=.90, type=float)
         network_args.add_argument('--rms_momentum', default=0.99, type=float)
@@ -61,6 +64,7 @@ class Parameters():
         network_args.add_argument('--clip_reward', default=True, type=bool)
         network_args.add_argument('--clip_tderror', default=True, type=bool)
         network_args.add_argument('--tf_summary_path', default="/tmp/network", type=str)
+        network_args.add_argument('--tf_checkpoint_path', default="/tmp/checkpoints", type=str)
 
     def parse(self):
         args = self.parser.parse_args()
@@ -70,7 +74,8 @@ class Parameters():
         changed_args = "-".join(changed_args) if len(changed_args) > 0 else "defaults"
         args.name = args.name + '-' + changed_args + '-' + str(random.randint(10000000, 99999999))
 
-        args.network_type = self.parse_network_type(args.network_type)
+        args.network_class = self.parse_network_type(args.network_type)
+        args.agent_class = self.parse_agent_type(args.agent_type)
 
         try:
             args.commit_hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).strip()
@@ -87,9 +92,15 @@ class Parameters():
 
         return args
 
+    def parse_agent_type(self, agent_string):
+        return {'agent': agent.Agent,
+                'qexplorer': agent.QExplorer,
+                'mdnexplorer': agent.MDNExplorer}[agent_string]
+
     def parse_network_type(self, network_string):
         return {'baseline': network.Baseline,
                 'linear': network.Linear,
+                'mdn': network.MDN,
                 'constrained': network.Constrained}[network_string]
 
 
