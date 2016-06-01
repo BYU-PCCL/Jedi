@@ -49,8 +49,8 @@ class Agent:
     def train(self):
         while True:
             try:
-                states, actions, rewards, next_states, terminals, idx = self.training_queue.get(timeout=1)
-                tderror, loss = self.network.train(states, actions, terminals, next_states, rewards)
+                states, actions, rewards, next_states, terminals, lookaheads, idx = self.training_queue.get(timeout=1)
+                tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
             except Queue.Empty:
                 # Catching an empty exception feels safer than using no timeout
                 # but I'm not sure if it's strictly necessary

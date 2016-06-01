@@ -75,4 +75,7 @@ class Memory:
         rewards = self.rewards[indexes]
         terminals = self.terminals[indexes]
 
-        return self.prestates.copy(), actions, rewards, self.poststates.copy(), terminals, indexes
+        # todo: obviously not a real lookahead
+        lookaheads = self.poststates.copy()
+
+        return self.prestates.copy(), actions, rewards, self.poststates.copy(), terminals, lookaheads, indexes

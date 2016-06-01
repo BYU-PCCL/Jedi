@@ -71,11 +71,6 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=
         environment.reset()
 
 # TODO
-# Network Weight Visualizer
-# Policy explorer for atari
-# learning rate annealer is broken
-
 # death ends episode
-# summary
 
 # if we prioritize -- do we prioritize based on delta, or clipped_delta?

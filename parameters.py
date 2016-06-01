@@ -50,7 +50,7 @@ class Parameters():
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.000025, type=float)
         network_args.add_argument('--learning_rate_decay', default=.96, type=float)
-        network_args.add_argument('--learning_rate_decay_step', default=1000000, type=float)
+        network_args.add_argument('--learning_rate_decay_step', default=50000, type=float)
         network_args.add_argument('--initializer', default='truncated-normal', type=str, help='xavier | normal | truncated-normal | uniform')
         network_args.add_argument('--rms_eps', default=0.01, type=float)
         network_args.add_argument('--rms_decay', default=.90, type=float)
@@ -65,7 +65,7 @@ class Parameters():
     def parse(self):
         args = self.parser.parse_args()
         ignored_args = ['verbose', 'sql_host', 'sql_db', 'sql_port', 'sql_user', 'sql_password',
-                        'vis', 'name', 'total_ticks', 'evaluate_frequency']
+                        'vis', 'name', 'total_ticks', 'evaluate_frequency', 'bypass_sql']
         changed_args = [key + "=" + str(getattr(args, key)) for key in vars(args) if key not in ignored_args and getattr(args, key) != self.parser.get_default(key)]
         changed_args = "-".join(changed_args) if len(changed_args) > 0 else "defaults"
         args.name = args.name + '-' + changed_args + '-' + str(random.randint(10000000, 99999999))

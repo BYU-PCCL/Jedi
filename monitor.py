@@ -63,6 +63,11 @@ class Monitor:
         if args.vis:
             self.initialize_visualization()
 
+        print("\n\nInitialized")
+        print("{0:>20} : {1:,} ".format("Network Parameters", len(self.network)))
+        print("{0:>20} : {1} ".format("Name", args.name))
+        print("\n")
+
     def initialize_visualization(self):
         self.args.vis = True
 
@@ -130,26 +135,26 @@ class Monitor:
 
     def print_stats(self, stats, evaluation=False):
 
-        policy = "None"
+        policy = "-"
         qs = [0.0]
         if self.policy_test:
             policy, qs = self.network.q(self.ideal_states)
             policy = "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy))
 
-        log = " |  episodes: {:<9} " \
+        log = " |  episodes: {:<8} " \
               "max q: {:<8.4f} " \
-              "score: {:>4} - {:<6}" \
+              "score: [{:>4}, {:<6}]" \
               "lr: {:<11.7f} " \
               "eps: {:<9.5} " \
-              "eval: {:<3} " \
-              "policy q: {:<8.4}" \
-              "policy: {}".format(self.environment.get_episodes(),
+              "loss: {:<10.6f} " \
+              "policy q: {:<6.4}" \
+              "policy: {} ".format(self.environment.get_episodes(),
                                   float(stats['max_q']) if stats['max_q'] is not None else 0.0,
                                   stats['min_score'],
                                   stats['max_score'],
                                   float(self.network.lr),
                                   float(self.agent.epsilon),
-                                  evaluation,
+                                  float(self.network.batch_loss),
                                   np.max(qs),
                                   policy)
 
