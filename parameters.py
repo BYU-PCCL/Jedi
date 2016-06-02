@@ -48,7 +48,7 @@ class Parameters():
         agent_args.add_argument('--lookahead', default=10, type=int, help='in frames')
 
         network_args = self.parser.add_argument_group('Network')
-        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'mdn', 'causal', 'constrained'])
+        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.00025, type=float)
@@ -95,12 +95,12 @@ class Parameters():
     def parse_agent_type(self, agent_string):
         return {'agent': agent.Agent,
                 'qexplorer': agent.QExplorer,
-                'mdnexplorer': agent.MDNExplorer}[agent_string]
+                'densityexplorer': agent.DensityExplorer}[agent_string]
 
     def parse_network_type(self, network_string):
         return {'baseline': network.Baseline,
                 'linear': network.Linear,
-                'mdn': network.MDN,
+                'density': network.Density,
                 'causal': network.Causal,
                 'constrained': network.Constrained}[network_string]
 

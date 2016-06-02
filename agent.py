@@ -5,6 +5,7 @@ from memory import Memory
 import Queue
 from threading import Thread
 import time
+import network
 
 class Agent:
     def __init__(self, args, environment, network):
@@ -75,6 +76,19 @@ class QExplorer(Agent):
 
         return np.random.choice(self.num_actions, p=qprob), qs[0]
 
-class MDNExplorer(Agent):
+class DensityExplorer(Agent):
     def __init__(self, args, environment, network):
         Agent.__init__(self, args, environment, network)
+        assert isinstance(network, network.Density), 'Density Explorer must use the Density Network'
+
+    def get_action(self, state, is_evaluate):
+        self.iterations += 1
+
+        action, qs, variances = self.network.q([self.phi])
+
+        if random.random() <= (self.epsilon if not is_evaluate else self.args.exploration_epsilon_evaluation):
+            return np.argmax(variances[0]), qs[0]
+
+        else:
+            action, qs = self.network.q([self.phi])
+            return action[0], qs[0]

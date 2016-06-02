@@ -57,6 +57,7 @@ class Network():
         self.weights = []
         self.biases = []
         self.activations = []
+        self.additional_q_ops = []
 
         self.sess = self.create_session(args) if sess is None else sess
 
@@ -210,9 +211,7 @@ class Network():
         return tf.placeholder('int64', shape, name=name)
 
     def q(self, states):
-        q_action, qs = self.sess.run([self.q_action, self.output], feed_dict={self.state: states})
-
-        return q_action, qs
+        return self.sess.run([self.q_action, self.output] + self.additional_q_ops, feed_dict={self.state: states})
 
     def train(self, states, actions, terminals, next_states, rewards, lookahead=None, target_network=None):
 
@@ -291,7 +290,7 @@ class Constrained(Network):
         return tf.reduce_mean(tf.square(processed_delta)) + tf.reduce_mean(self.constraint_error)
 
 
-class MDN(Network):
+class Density(Network):
     def __init__(self, args, environment, name='mdn_network', sess=None):
         with tf.variable_scope(name) as scope:
             Network.__init__(self, args, environment, name, sess)
@@ -303,6 +302,8 @@ class MDN(Network):
             self.fc4,    w4, b4 = self.linear(self.flatten(self.conv3, name="fc4"), 512, name='fc4')
             self.output, w5, b5 = self.linear(self.fc4, environment.get_num_actions(), activation_fn='none', name='output')
             self.variance, w6, b6 = self.linear(self.fc4, environment.get_num_actions(), name='variance')
+
+            self.additional_q_ops.append(self.variance)
 
             self.post_init()
 
