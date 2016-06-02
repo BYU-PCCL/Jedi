@@ -91,9 +91,8 @@ class DensityExplorer(Agent):
         action, qs, variances = self.network.q([self.phi])
 
         if random.random() <= (self.epsilon if not is_evaluate else self.args.exploration_epsilon_evaluation):
-            print variances
+            print "\n", variances[0], qs[0]
             return np.argmax(variances[0]), qs[0]
 
         else:
-            action, qs = self.network.q([self.phi])
             return action[0], qs[0]
