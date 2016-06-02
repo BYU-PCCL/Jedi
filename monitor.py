@@ -135,11 +135,16 @@ class Monitor:
 
     def print_stats(self, stats, evaluation=False):
 
-        policy = "-"
-        qs = [0.0]
-        if self.policy_test:
-            policy, qs = self.network.q(self.ideal_states)
-            policy = "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy))
+        # policy = "-"
+        # qs = [0.0]
+        # if self.policy_test:
+        #     policy, qs = self.network.q(self.ideal_states)
+        #     policy = "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy))
+
+        actions = np.zeros(self.environment.num_actions())
+        if evaluation:
+            for action in self.agent.memory.actions:
+                actions[action] += 1.0
 
         log = " |  episodes: {}  " \
               "max q: {:<8.4f} " \
@@ -147,16 +152,14 @@ class Monitor:
               "lr: {:<11.7f} " \
               "eps: {:<9.5} " \
               "loss: {:<10.6f} " \
-              "policy q: {:<6.4}" \
-              "policy: {} ".format(self.environment.get_episodes(),
+              "actions: {} ".format(self.environment.get_episodes(),
                                   float(stats['max_q']) if stats['max_q'] is not None else 0.0,
                                   stats['min_score'],
                                   stats['max_score'],
                                   float(self.network.lr),
                                   float(self.agent.epsilon),
                                   float(self.network.batch_loss),
-                                  np.max(qs),
-                                  policy)
+                                  actions)
 
         self.console_stats = Stats()
 
