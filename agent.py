@@ -85,12 +85,13 @@ class DensityExplorer(Agent):
     def get_action(self, state, is_evaluate):
         self.iterations += 1
 
-        if self.iterations > self.args.iterations_before_training:
+        if self.iterations < self.args.iterations_before_training:
             return random.randint(0, self.num_actions - 1), None
 
         action, qs, variances = self.network.q([self.phi])
 
         if random.random() <= (self.epsilon if not is_evaluate else self.args.exploration_epsilon_evaluation):
+            print variances
             return np.argmax(variances[0]), qs[0]
 
         else:
