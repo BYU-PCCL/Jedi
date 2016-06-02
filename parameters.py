@@ -46,6 +46,7 @@ class Parameters():
         agent_args.add_argument('--train_frequency', default=3, type=int, help='in ticks')
         agent_args.add_argument('--threads', default=4, type=int)
         agent_args.add_argument('--lookahead', default=10, type=int, help='in frames')
+        agent_args.add_argument('--use_prioritization', action='store_const', const=True, default=False)
 
         network_args = self.parser.add_argument_group('Network')
         network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained'])
@@ -61,8 +62,8 @@ class Parameters():
         network_args.add_argument('--gpu_fraction', default=.90, type=float)
         network_args.add_argument('--target_network_alpha', default=1.0, type=float)
         network_args.add_argument('--copy_frequency', default=2500, type=int, help='in calls to train')
-        network_args.add_argument('--clip_reward', default=True, type=bool)
-        network_args.add_argument('--clip_tderror', default=True, type=bool)
+        network_args.add_argument('--clip_reward', default=1, type=int)
+        network_args.add_argument('--clip_tderror', default=1, type=int)
         network_args.add_argument('--tf_summary_path', default="/tmp/network", type=str)
         network_args.add_argument('--tf_checkpoint_path', default="/tmp/checkpoints", type=str)
 

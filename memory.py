@@ -1,19 +1,24 @@
 """Code from https://github.com/tambetm/simple_dqn/blob/master/src/replay_memory.py"""
 import random
 import numpy as np
+from threading import Lock
 
 class Memory:
     def __init__(self, args, environment):
         self.args = args
         self.dims = environment.get_state_space()
+        self.priority_lock = Lock()
 
         self.actions = np.empty(args.replay_memory_size, dtype=np.uint8)
-        self.rewards = np.empty(args.replay_memory_size, dtype=np.integer)
+        self.rewards = np.empty(args.replay_memory_size, dtype=np.uint8)
+        self.priorities = np.empty(args.replay_memory_size, dtype=np.float64)
+        self.sample_priorities = np.zeros(args.replay_memory_size, dtype=np.float64)
         self.screens = np.empty(tuple([args.replay_memory_size]) + self.dims, dtype=np.uint8)
         self.terminals = np.empty(args.replay_memory_size, dtype=np.bool)
 
         self.count = 0
         self.current = 0
+        self.priority_sum = 1
 
         # pre-allocate prestates and poststates for minibatch
         self.prestates = np.empty((args.batch_size, args.phi_frames) + self.dims, dtype=np.uint8)
@@ -23,13 +28,20 @@ class Memory:
 
         # start a thread
 
-    def add(self, screen, reward, action, terminal):
+    def update(self, index, priority):
+        if self.args.use_prioritization:
+            self.priority_lock.acquire()
+            self.priorities[index] = priority
+            self.priority_lock.release()
+
+    def add(self, screen, reward, action, terminal, priority=100):
         assert screen.shape == self.dims
         # NB! screen is post-state, after action and reward
         self.actions[self.current] = action
         self.rewards[self.current] = reward
         self.screens[self.current, ...] = screen
         self.terminals[self.current] = terminal
+        self.update(self.current, priority)
 
         self.count = max(self.count, self.current + 1)
         self.current = (self.current + 1) % self.args.replay_memory_size
@@ -50,16 +62,28 @@ class Memory:
     def can_sample(self):
         return self.count > self.args.phi_frames
 
+    def update_sample_priorities(self):
+        if self.args.use_prioritization:
+            self.priority_lock.acquire()
+            self.sample_priorities = self.priorities / np.sum(self.priorities)
+            self.priority_lock.release()
+
     def sample(self):
         # memory must include poststate, prestate and history
-        assert self.count > self.args.phi_frames
+        assert self.can_sample()
+
+        self.update_sample_priorities()  # We call sample far less frequently than we call add or update
+
         # sample random indexes
         indexes = []
         while len(indexes) < self.args.batch_size:
             # find random index
             while True:
                 # sample one index (ignore states wraping over
-                index = random.randint(self.args.phi_frames, self.count - 1)
+                if self.args.use_prioritization:
+                    index = np.random.choice(self.args.replay_memory_size, p=self.sample_priorities)
+                else:
+                    index = random.randint(self.args.phi_frames, self.count - 1)
                 # if wraps over current pointer, then get new one
                 if index >= self.current and index - self.args.phi_frames < self.current:
                     continue

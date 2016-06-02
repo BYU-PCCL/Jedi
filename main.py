@@ -74,8 +74,6 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=
 # HIGH
 # convergance training
 # add prioritization
-# dynamic train and q ops in network for mdn
-# rename mdn to Density
 
 # MEDIUM
 # death ends episode
@@ -83,6 +81,8 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=
 # add constrained priorities
 
 # LOW
+# dynamic layer labeling
+# dynamic train  ops in network
 # add checkpoints
 # add gray to custom gym
 

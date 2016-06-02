@@ -4,8 +4,7 @@ import numpy as np
 from memory import Memory
 import Queue
 from threading import Thread
-import time
-import network as networks
+
 
 class Agent(object):
     def __init__(self, args, environment, network):
@@ -26,7 +25,6 @@ class Agent(object):
             self.threads.append(Thread(target=self.train))
             self.threads[-1].setDaemon(True)
             self.threads[-1].start()
-            self.ready_queue.put(True)
 
         self.sample_thread = Thread(target=self.generate_samples)
         self.sample_thread.setDaemon(True)
@@ -48,8 +46,8 @@ class Agent(object):
             self.memory.add(state, reward, action, terminal)
 
             if self.iterations > self.args.iterations_before_training and self.iterations % self.args.train_frequency == 0:
+                self.ready_queue.put(True)  # Wait for training to finish
                 self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
-                self.ready_queue.get()  # Wait for training to finish
 
     def generate_samples(self):
         while True:
@@ -58,9 +56,10 @@ class Agent(object):
 
     def train(self):
         while True:
-            states, actions, rewards, next_states, terminals, lookaheads, idx = self.training_queue.get(timeout=1)
+            self.ready_queue.get()  # Notify main thread a training has complete
+            states, actions, rewards, next_states, terminals, lookaheads, idx = self.training_queue.get()
             tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
-            self.ready_queue.put(True)  # Notify main thread a training has complete
+            self.memory.update(idx, np.abs(tderror))
 
 class QExplorer(Agent):
     def __init__(self, args, environment, network):
@@ -69,12 +68,16 @@ class QExplorer(Agent):
     def get_action(self, state, is_evaluate):
         self.iterations += 1
 
+        if self.iterations < self.args.iterations_before_training:
+            return random.randint(0, self.num_actions - 1), None
+
         action, qs = self.network.q([self.phi])
-        qprob = qs[0] - np.min(qs[0])
-        qprob += np.mean(qprob)  # ensures everyone has some chance of being selected
+        qprob = qs[0] - np.min(qs[0]) + 0.01
+        qprob += np.mean(qprob) * self.epsilon  # ensures everyone has chance of being selected, but decays over time
         qprob = qprob / np.sum(qprob)
 
         return np.random.choice(self.num_actions, p=qprob), qs[0]
+
 
 class DensityExplorer(Agent):
     def __init__(self, args, environment, network):
@@ -90,7 +93,13 @@ class DensityExplorer(Agent):
         action, qs, variances = self.network.q([self.phi])
 
         if random.random() <= (self.epsilon if not is_evaluate else self.args.exploration_epsilon_evaluation):
-            return np.argmax(variances[0]), qs[0]
+            vprob = variances[0] + 1.0
+            vprob = vprob / np.sum(vprob)
+
+            if self.iterations % 1000 == 0:
+                print vprob, variances[0], " "
+
+            return np.random.choice(self.num_actions, p=vprob), qs[0]
 
         else:
             return action[0], qs[0]

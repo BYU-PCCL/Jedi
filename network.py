@@ -163,11 +163,17 @@ class Network(object):
             'truncated-normal': tf.truncated_normal_initializer(0, stddev=stddev)
         }[initializer if initializer != 'default' else self.default_initializer]
 
+    def parse_activation(self, activation):
+        return {
+            'relu': tf.nn.relu,
+            'sigmoid': tf.nn.sigmoid,
+            'none': None}[activation]
+
     def linear(self, source, output_size, stddev=0.02, initializer='default', bias_start=0.01, activation_fn='relu', name='linear', w=None, b=None):
         shape = source.get_shape().as_list()
 
         initializer = self.parse_initializer(initializer, stddev)
-        activation_fn = tf.nn.relu if activation_fn == 'relu' else None
+        activation_fn = self.parse_activation(activation_fn)
 
         with tf.variable_scope(name + '_linear') as scope:
             if w is None:
@@ -296,20 +302,20 @@ class Density(Network):
             Network.__init__(self, args, environment, name, sess)
 
             # Build Network
-            self.conv1,  w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
-            self.conv2,  w2, b2 = self.conv2d(self.conv1, size=4, filters=64, stride=2, name='conv2')
-            self.conv3,  w3, b3 = self.conv2d(self.conv2, size=3, filters=64, stride=1, name='conv3')
-            self.fc4,    w4, b4 = self.linear(self.flatten(self.conv3, name="fc4"), 512, name='fc4')
-            self.output, w5, b5 = self.linear(self.fc4, environment.get_num_actions(), activation_fn='none', name='output')
-            self.variance, w6, b6 = self.linear(self.fc4, environment.get_num_actions(), name='variance')
+            self.conv1,    w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
+            self.conv2,    w2, b2 = self.conv2d(self.conv1, size=4, filters=64, stride=2, name='conv2')
+            self.conv3,    w3, b3 = self.conv2d(self.conv2, size=3, filters=64, stride=1, name='conv3')
+            self.fc4,      w4, b4 = self.linear(self.flatten(self.conv3, name="fc4"), 512, name='fc4')
+            self.output,   w5, b5 = self.linear(self.fc4, environment.get_num_actions(), activation_fn='none', name='output')
+            self.variance, w6, b6 = self.linear(self.fc4, environment.get_num_actions(), activation_fn='sigmoid', name='variance')
 
             self.additional_q_ops.append(self.variance)
 
             self.post_init()
 
     def get_loss(self, processed_delta, prediction, truth):
-        sigma = self.sum(self.variance * self.action_one_hot, name='variance_acted') + 0.001
-        return tf.reduce_mean(tf.log(sigma) + tf.square(prediction - truth) / (2.0 * tf.square(sigma)))
+        sigma = self.sum(self.variance * self.action_one_hot, name='variance_acted') + 0.01
+        return tf.reduce_mean(tf.log(sigma) + tf.square(processed_delta) / (2.0 * tf.square(sigma)))
 
 
 class Causal(Network):
@@ -318,14 +324,14 @@ class Causal(Network):
             Network.__init__(self, args, environment, name, sess)
 
             # Common Perception
-            self.l1,  w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
+            self.l1,     w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
 
             # A Side
-            self.l2a,  w2, b2 = self.conv2d(self.l1, size=4, filters=64, stride=2, name='a_conv2')
+            self.l2a,    w2, b2 = self.conv2d(self.l1, size=4, filters=64, stride=2, name='a_conv2')
             self.l2a_fc, w3, b3 = self.linear(self.flatten(self.l2a, name="a_fc4"), 32, activation_fn='none', name='a_fc3')
 
             # B Side
-            self.l2b, w4, b4 = self.conv2d(self.l1, size=4, filters=64, stride=2, name='b_conv2')
+            self.l2b,    w4, b4 = self.conv2d(self.l1, size=4, filters=64, stride=2, name='b_conv2')
             self.l2b_fc, w5, b5 = self.linear(self.flatten(self.l2b, name="b_fc4"), 32, activation_fn='none', name='b_fc3')
 
             # Causal Matrix
@@ -333,7 +339,7 @@ class Causal(Network):
             self.l2b_fc_e = self.expand(self.l2b_fc, 1, name='b')  # now ?x1x32
             self.causes = self.flatten(tf.batch_matmul(self.l2a_fc_e, self.l2b_fc_e, name='causes'))
 
-            self.l4, w6, b6 = self.linear(self.causes, 512, name='l4')
-            self.output, w5, b5 = self.linear(self.l4, environment.get_num_actions(), activation_fn='none', name='output')
+            self.l4,      w6, b6 = self.linear(self.causes, 512, activation_fn='sigmoid', name='l4')
+            self.output,  w5, b5 = self.linear(self.l4, environment.get_num_actions(), activation_fn='none', name='output')
 
             self.post_init()
