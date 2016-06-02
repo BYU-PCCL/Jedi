@@ -35,7 +35,7 @@ class Parameters():
         environment_args.add_argument('--buffer_size', default=2, type=int, help='number of frames to max')
 
         agent_args = self.parser.add_argument_group('Agent')
-        agent_args.add_argument('--agent_type', default='agent', type=str, choices=['agent', 'qexplorer', 'mdnexplorer'])
+        agent_args.add_argument('--agent_type', default='agent', type=str, choices=['agent', 'qexplorer', 'density'])
         agent_args.add_argument('--phi_frames', default=4, type=int)
         agent_args.add_argument('--replay_memory_size', default=1000000, type=int)
         agent_args.add_argument('--batch_size', default=32, type=int)
@@ -95,7 +95,7 @@ class Parameters():
     def parse_agent_type(self, agent_string):
         return {'agent': agent.Agent,
                 'qexplorer': agent.QExplorer,
-                'densityexplorer': agent.DensityExplorer}[agent_string]
+                'density': agent.DensityExplorer}[agent_string]
 
     def parse_network_type(self, network_string):
         return {'baseline': network.Baseline,
