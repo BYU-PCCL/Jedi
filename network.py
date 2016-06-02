@@ -2,7 +2,7 @@ import tensorflow as tf
 
 import numpy as np
 
-class TrainTarget:
+class TrainTarget(object):
     def __init__(self, Type, args, environment):
         self.args = args
         self.sess = Type.create_session(args)
@@ -44,7 +44,7 @@ class TrainTarget:
         return response
 
 
-class Network():
+class Network(object):
     def __init__(self, args, environment, name='network', sess=None):
         self.args = args
         self.environment = environment

@@ -7,7 +7,7 @@ from threading import Thread
 import time
 import network as networks
 
-class Agent:
+class Agent(object):
     def __init__(self, args, environment, network):
         self.args = args
         self.network = network
@@ -80,8 +80,7 @@ class DensityExplorer(Agent):
     def __init__(self, args, environment, network):
         Agent.__init__(self, args, environment, network)
 
-        print isinstance(network, networks.Density), type(network)
-        assert isinstance(network, networks.Density), 'Density Explorer must use the Density Network'
+        assert args.network_type == 'density', 'Density Explorer must use the Density Network'
 
     def get_action(self, state, is_evaluate):
         self.iterations += 1
