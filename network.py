@@ -94,7 +94,7 @@ class Network():
             self.processed_delta = tf.clip_by_value(self.delta, -1.0, 1.0) if self.args.clip_tderror else self.delta
 
         with tf.name_scope('loss') as scope:
-            self.loss = self.get_loss(self.delta, truth=target_q, prediction=q_acted)
+            self.loss = self.get_loss(self.processed_delta, truth=target_q, prediction=q_acted)
 
         with tf.name_scope('learning_rate') as scope:
             # Learning Rate Calculation

@@ -43,7 +43,7 @@ class Parameters():
         agent_args.add_argument('--exploration_epsilon_end', default=.1, type=float)
         agent_args.add_argument('--exploration_epsilon_decay', default=1000000, type=int, help='in calls to train')
         agent_args.add_argument('--exploration_epsilon_evaluation', default=.05, type=int, help='epsilon for evaluation')
-        agent_args.add_argument('--train_frequency', default=4, type=int, help='in ticks')
+        agent_args.add_argument('--train_frequency', default=3, type=int, help='in ticks')
         agent_args.add_argument('--threads', default=4, type=int)
         agent_args.add_argument('--lookahead', default=10, type=int, help='in frames')
 
