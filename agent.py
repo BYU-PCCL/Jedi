@@ -79,6 +79,8 @@ class QExplorer(Agent):
 class DensityExplorer(Agent):
     def __init__(self, args, environment, network):
         Agent.__init__(self, args, environment, network)
+
+        print isinstance(network, networks.Density), type(network)
         assert isinstance(network, networks.Density), 'Density Explorer must use the Density Network'
 
     def get_action(self, state, is_evaluate):
