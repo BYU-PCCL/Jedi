@@ -5,7 +5,7 @@ from memory import Memory
 import Queue
 from threading import Thread
 import time
-import network
+import network as networks
 
 class Agent:
     def __init__(self, args, environment, network):
@@ -79,7 +79,7 @@ class QExplorer(Agent):
 class DensityExplorer(Agent):
     def __init__(self, args, environment, network):
         Agent.__init__(self, args, environment, network)
-        assert isinstance(network, network.Density), 'Density Explorer must use the Density Network'
+        assert isinstance(network, networks.Density), 'Density Explorer must use the Density Network'
 
     def get_action(self, state, is_evaluate):
         self.iterations += 1
