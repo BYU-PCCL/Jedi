@@ -143,23 +143,25 @@ class Monitor:
 
         actions = np.zeros(self.environment.num_actions())
         if evaluation:
-            for action in self.agent.memory.actions:
+            for action in self.agent.memory.actions[0:self.agent.memory.count]:
                 actions[action] += 1.0
+            actions /= np.sum(actions)
 
-        log = " |  episodes: {}  " \
-              "max q: {:<8.4f} " \
-              "score: [{:>2g},{:<2g}]  " \
-              "lr: {:<11.7f} " \
-              "eps: {:<9.5} " \
-              "loss: {:<10.6f} " \
-              "actions: {} ".format(self.environment.get_episodes(),
-                                  float(stats['max_q']) if stats['max_q'] is not None else 0.0,
-                                  stats['min_score'],
-                                  stats['max_score'],
-                                  float(self.network.lr),
-                                  float(self.agent.epsilon),
-                                  float(self.network.batch_loss),
-                                  actions)
+        with np.printoptions(precision=3, suppress=True):
+            log = " |  episodes: {}  " \
+                  "max q: {:<8.4f} " \
+                  "score: [{:>2g},{:<2g}]  " \
+                  "lr: {:<11.7f} " \
+                  "eps: {:<9.5} " \
+                  "loss: {:<10.6f} " \
+                  "actions: {} ".format(self.environment.get_episodes(),
+                                      float(stats['max_q']) if stats['max_q'] is not None else 0.0,
+                                      stats['min_score'],
+                                      stats['max_score'],
+                                      float(self.network.lr),
+                                      float(self.agent.epsilon),
+                                      float(self.network.batch_loss),
+                                      actions)
 
         self.console_stats = Stats()
 
