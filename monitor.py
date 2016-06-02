@@ -141,27 +141,26 @@ class Monitor:
         #     policy, qs = self.network.q(self.ideal_states)
         #     policy = "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy))
 
-        actions = np.zeros(self.environment.num_actions())
+        actions = np.zeros(self.environment.get_num_actions())
         if evaluation:
             for action in self.agent.memory.actions[0:self.agent.memory.count]:
                 actions[action] += 1.0
             actions /= np.sum(actions)
 
-        with np.printoptions(precision=3, suppress=True):
-            log = " |  episodes: {}  " \
-                  "max q: {:<8.4f} " \
-                  "score: [{:>2g},{:<2g}]  " \
-                  "lr: {:<11.7f} " \
-                  "eps: {:<9.5} " \
-                  "loss: {:<10.6f} " \
-                  "actions: {} ".format(self.environment.get_episodes(),
-                                      float(stats['max_q']) if stats['max_q'] is not None else 0.0,
-                                      stats['min_score'],
-                                      stats['max_score'],
-                                      float(self.network.lr),
-                                      float(self.agent.epsilon),
-                                      float(self.network.batch_loss),
-                                      actions)
+        log = " |  episodes: {}  " \
+              "max q: {:<8.4f} " \
+              "score: [{:>2g},{:<2g}]  " \
+              "lr: {:<11.7f} " \
+              "eps: {:<9.5} " \
+              "loss: {:<10.6f}  " \
+              "actions: {} ".format(self.environment.get_episodes(),
+                                  float(stats['max_q']) if stats['max_q'] is not None else 0.0,
+                                  stats['min_score'],
+                                  stats['max_score'],
+                                  float(self.network.lr),
+                                  float(self.agent.epsilon),
+                                  float(self.network.batch_loss),
+                                  np.array_str(actions, precision=2))
 
         self.console_stats = Stats()
 
