@@ -79,7 +79,6 @@ class QExplorer(Agent):
 class DensityExplorer(Agent):
     def __init__(self, args, environment, network):
         Agent.__init__(self, args, environment, network)
-
         assert args.network_type == 'density', 'Density Explorer must use the Density Network'
 
     def get_action(self, state, is_evaluate):
@@ -91,7 +90,6 @@ class DensityExplorer(Agent):
         action, qs, variances = self.network.q([self.phi])
 
         if random.random() <= (self.epsilon if not is_evaluate else self.args.exploration_epsilon_evaluation):
-            print "\n", variances[0], qs[0]
             return np.argmax(variances[0]), qs[0]
 
         else:
