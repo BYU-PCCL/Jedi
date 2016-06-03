@@ -60,7 +60,7 @@ class Memory:
             indexes = [(index - i) % self.count for i in reversed(range(self.args.phi_frames))]
             return self.screens[indexes, ...]
 
-    def can_sample(self):
+    def can_sample(self): 
         return self.count > self.args.batch_size
 
     def sample_priority_indexes(self, size):
