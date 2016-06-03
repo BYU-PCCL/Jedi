@@ -9,6 +9,7 @@ class TrainTarget(object):
         self.args = args
         self.sess = Type.create_session(args)
 
+
         self.target_network = Type(args, environment, 'target', self.sess)
         self.train_network = Type(args, environment, 'train', self.sess)
 
@@ -73,7 +74,8 @@ class Network(object):
 
         self.sess = self.create_session(args) if sess is None else sess
 
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        with tf.device('/cpu:0'):
+            self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
         with tf.name_scope('input') as scope:
             self.state = self.float([None, args.phi_frames] + list(environment.get_state_space()), name='state') / float(environment.max_state_value())
@@ -124,16 +126,21 @@ class Network(object):
                                                        decay=self.args.rms_decay,
                                                        momentum=float(self.args.rms_momentum),
                                                        epsilon=self.args.rms_eps).minimize(self.loss,
-                                                                                           global_step=self.global_step)
+                                                                                           global_step=self.global_step,
+                                                                                           colocate_gradients_with_ops=True)
 
         # Initialize
-        self.sess.run(tf.initialize_all_variables())
+
+        with tf.device('/cpu:0'):
+            self.sess.run(tf.initialize_all_variables())
 
     @staticmethod
     def create_session(args):
         tf.set_random_seed(args.random_seed)
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_fraction, allow_growth=True)
-        return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_fraction,
+                                    allow_growth=True)
+        return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options,
+                                                allow_soft_placement=True))
 
     def one_hot(self, source, size, name='onehot'):
         return tf.one_hot(source, size, 1.0, 0.0, name=name)
@@ -324,7 +331,7 @@ class Density(Network):
             self.post_init()
 
     def get_loss(self, processed_delta, prediction, truth):
-        sigma = self.sum(self.variance * self.action_one_hot, name='variance_acted') + 0.01
+        sigma = self.sum(self.variance * self.action_one_hot, name='variance_acted') + 0.0001
         return tf.reduce_mean(tf.log(sigma) + tf.square(processed_delta) / (2.0 * tf.square(sigma)))
 
 

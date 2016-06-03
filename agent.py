@@ -26,8 +26,10 @@ class Agent(object):
             self.threads[-1].setDaemon(True)
             self.threads[-1].start()
 
-        self.sample_thread = Thread(target=self.generate_samples)
-        self.sample_thread.setDaemon(True)
+        self.sample_threads = []
+        for _ in range(6):
+            self.sample_threads.append(Thread(target=self.generate_samples))
+            self.sample_threads[-1].setDaemon(True)
 
     def get_action(self, state, is_evaluate):
         self.iterations += 1
@@ -44,8 +46,9 @@ class Agent(object):
         self.memory.add(state, reward, action, terminal)
 
         if self.iterations > self.args.iterations_before_training and self.iterations % self.args.train_frequency == 0:
-            if not self.sample_thread.isAlive():
-                self.sample_thread.start()
+            if not self.sample_threads[0].isAlive():
+                for thread in self.sample_threads:
+                    thread.start()
 
             self.ready_queue.put(True)  # Wait for training to finish
             self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)

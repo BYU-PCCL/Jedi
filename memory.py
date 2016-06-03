@@ -20,10 +20,6 @@ class Memory:
         self.current = 0
         self.priority_sum = 0
 
-        # pre-allocate prestates and poststates for minibatch
-        self.prestates = np.empty((args.batch_size, args.phi_frames) + self.dims, dtype=np.uint8)
-        self.poststates = np.empty((args.batch_size, args.phi_frames) + self.dims, dtype=np.uint8)
-        self.lookaheads = np.empty((args.batch_size, args.phi_frames) + self.dims, dtype=np.uint8)
         self.void_phi = np.zeros(tuple([args.phi_frames]) + self.dims, dtype=np.uint8)
 
         # start a thread
@@ -64,9 +60,10 @@ class Memory:
         return self.count > self.args.batch_size
 
     def sample_priority_indexes(self, size):
-        proposal = np.random.random(size) * self.priority_sum
+        cumsum = np.cumsum(self.priorities)
+        proposal = np.random.random(size) * cumsum[-1]
         # Faster than np.random.choice
-        return list(np.searchsorted(np.cumsum(self.priorities), proposal, side='left'))
+        return list(np.searchsorted(cumsum, proposal, side='left'))
 
     def sample(self):
         # memory must include poststate, prestate and history
@@ -74,6 +71,10 @@ class Memory:
 
         indexes = []
         random_indexes = []
+
+        prestates = np.empty((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
+        poststates = np.empty((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
+        lookaheads = np.empty((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
 
         if self.args.use_prioritization:
             random_indexes = self.sample_priority_indexes(self.args.batch_size)
@@ -98,14 +99,14 @@ class Memory:
                 break
 
             # NB! having index first is fastest in C-order matrices
-            self.prestates[len(indexes), ...] = self.get_state(index - 1)
-            self.poststates[len(indexes), ...] = self.get_state(index)
+            prestates[len(indexes), ...] = self.get_state(index - 1)
+            poststates[len(indexes), ...] = self.get_state(index)
 
             # if lookahead spans into the next episode, void it
             if self.terminals[index:index + self.args.lookahead].any():
-                self.lookaheads[len(indexes), ...] = self.void_phi
+                lookaheads[len(indexes), ...] = self.void_phi
             else:
-                self.lookaheads[len(indexes), ...] = self.get_state(index + self.args.lookahead)
+                lookaheads[len(indexes), ...] = self.get_state(index + self.args.lookahead)
 
             indexes.append(index)
 
@@ -113,4 +114,4 @@ class Memory:
         rewards = self.rewards[indexes]
         terminals = self.terminals[indexes]
 
-        return self.prestates.copy(), actions, rewards, self.poststates.copy(), terminals, self.lookaheads.copy(), indexes
+        return prestates, actions, rewards, poststates, terminals, lookaheads, indexes
