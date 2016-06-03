@@ -1,6 +1,8 @@
 import tensorflow as tf
-
+import subprocess
+import os
 import numpy as np
+import shutil
 
 class TrainTarget(object):
     def __init__(self, Type, args, environment):
@@ -14,16 +16,26 @@ class TrainTarget(object):
         self.lr = 0.0
         self.batch_loss = 0.0
 
-        self.copy = [
-            weight.assign(args.target_network_alpha * self.train_network.weights[i] + (1.0 - args.target_network_alpha) * weight, use_locking=True)
-                for i, weight in enumerate(self.target_network.weights)
-        ] + [
-            bias.assign(args.target_network_alpha * self.train_network.biases[i] + (1.0 - args.target_network_alpha) * bias, use_locking=True)
-                for i, bias in enumerate(self.target_network.biases)
-        ]
+        with tf.name_scope(args.network_type + "-update") as scope:
+            self.copy = [
+                weight.assign(args.target_network_alpha * self.train_network.weights[i] + (1.0 - args.target_network_alpha) * weight, use_locking=True)
+                    for i, weight in enumerate(self.target_network.weights)
+            ] + [
+                bias.assign(args.target_network_alpha * self.train_network.biases[i] + (1.0 - args.target_network_alpha) * bias, use_locking=True)
+                    for i, bias in enumerate(self.target_network.biases)
+            ]
+
+        self.tensorboard()
 
     def __len__(self):
         return len(self.train_network)
+
+    def tensorboard(self):
+        tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
+        subprocess.Popen(["tensorboard", "--logdir=" + self.args.tf_summary_path],
+                         stdout=open(os.devnull, 'w'),
+                         stderr=open(os.devnull, 'w'),
+                         close_fds=True)
 
     def update(self):
         self.sess.run(self.copy)
@@ -116,8 +128,6 @@ class Network(object):
 
         # Initialize
         self.sess.run(tf.initialize_all_variables())
-        tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
-
 
     @staticmethod
     def create_session(args):
@@ -240,8 +250,8 @@ class Network(object):
         return delta, self.batch_loss
 
 class Baseline(Network):
-    def __init__(self, args, environment, name='baseline_network', sess=None):
-        with tf.variable_scope(name) as scope:
+    def __init__(self, args, environment, name='network', sess=None):
+        with tf.variable_scope("baseline-" + name) as scope:
             Network.__init__(self, args, environment, name, sess)
 
             # Build Network
@@ -255,8 +265,8 @@ class Baseline(Network):
 
 
 class Linear(Network):
-    def __init__(self, args, environment, name='linear_network', sess=None):
-        with tf.variable_scope(name) as scope:
+    def __init__(self, args, environment, name='network', sess=None):
+        with tf.variable_scope("linear-" + name) as scope:
             Network.__init__(self, args, environment, name, sess)
 
             self.fc1,    w1, b1 = self.linear(self.flatten(self.state, name="fc1"), 500, name='fc1')
@@ -266,8 +276,8 @@ class Linear(Network):
             self.post_init()
 
 class Constrained(Network):
-    def __init__(self, args, environment, name='constrained_network', sess=None):
-        with tf.variable_scope(name) as scope:
+    def __init__(self, args, environment, name='network', sess=None):
+        with tf.variable_scope("constrained-" + name) as scope:
             Network.__init__(self, args, environment, name, sess)
 
             self.conv1,     w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
@@ -297,8 +307,8 @@ class Constrained(Network):
 
 
 class Density(Network):
-    def __init__(self, args, environment, name='mdn_network', sess=None):
-        with tf.variable_scope(name) as scope:
+    def __init__(self, args, environment, name='network', sess=None):
+        with tf.variable_scope("density-" + name) as scope:
             Network.__init__(self, args, environment, name, sess)
 
             # Build Network
@@ -319,8 +329,8 @@ class Density(Network):
 
 
 class Causal(Network):
-    def __init__(self, args, environment, name='baseline_network', sess=None):
-        with tf.variable_scope(name) as scope:
+    def __init__(self, args, environment, name='network', sess=None):
+        with tf.variable_scope("causal-" + name) as scope:
             Network.__init__(self, args, environment, name, sess)
 
             # Common Perception
@@ -339,7 +349,7 @@ class Causal(Network):
             self.l2b_fc_e = self.expand(self.l2b_fc, 1, name='b')  # now ?x1x32
             self.causes = self.flatten(tf.batch_matmul(self.l2a_fc_e, self.l2b_fc_e, name='causes'))
 
-            self.l4,      w6, b6 = self.linear(self.causes, 512, activation_fn='sigmoid', name='l4')
+            self.l4,      w6, b6 = self.linear(self.causes, 512, name='l4')
             self.output,  w5, b5 = self.linear(self.l4, environment.get_num_actions(), activation_fn='none', name='output')
 
             self.post_init()
