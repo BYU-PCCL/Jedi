@@ -2,6 +2,7 @@
 import random
 import numpy as np
 from threading import Lock
+from collections import deque
 
 class Memory:
     def __init__(self, args, environment):
@@ -72,6 +73,11 @@ class Memory:
         self.sample_priorities = self.priorities / self.priority_sum
         self.priority_lock.release()
 
+    def sample_priority_indexes(self, size):
+        proposal = np.random.random(size)
+        # Faster than np.random.choice
+        return list(np.searchsorted(np.cumsum(self.sample_priorities), proposal, side='left'))
+
     def sample(self):
         # memory must include poststate, prestate and history
         assert self.can_sample()
@@ -81,7 +87,7 @@ class Memory:
 
         if self.args.use_prioritization:
             self.update_sample_priorities()  # We call sample far less frequently than we call add or update
-            random_indexes = np.random.choice(self.args.replay_memory_size, size=self.args.batch_size, p=self.sample_priorities)
+            random_indexes = self.sample_priority_indexes(self.args.batch_size)
 
         while len(indexes) < self.args.batch_size:
             # find random index

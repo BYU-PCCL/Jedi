@@ -74,6 +74,9 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=
 # HIGH
 # convergance training
 # add prioritization
+# automatically delete /tmp/network when starting
+# automatically start tensorboard
+# automatically shut down tensorboard
 
 # MEDIUM
 # death ends episode
@@ -87,3 +90,11 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=
 # add gray to custom gym
 
 # if we prioritize -- do we prioritize based on delta, or clipped_delta?
+
+
+# discussion topics with dr. wingate
+# - density network learning zeros - does he have any ideas?
+# - causal network q-value out of control
+# - constrained network not learning yet
+# - baseline network initialization matters (sometimes q-values are super large)
+# - high level: what are we testing? where are we hoping this takes us? how can we better prepare for a paper?
