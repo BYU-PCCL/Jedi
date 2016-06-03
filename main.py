@@ -73,7 +73,6 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=
 # TODO
 # HIGH
 # convergance training
-# add prioritization
 # automatically delete /tmp/network when starting
 # automatically start tensorboard
 # automatically shut down tensorboard

@@ -41,15 +41,14 @@ class Agent(object):
         self.phi[:-1] = self.phi[1:]
         self.phi[-1] = state
 
-        if not is_evaluate:
-            self.memory.add(state, reward, action, terminal)
+        self.memory.add(state, reward, action, terminal)
 
-            if self.iterations > self.args.iterations_before_training and self.iterations % self.args.train_frequency == 0:
-                if not self.sample_thread.isAlive():
-                    self.sample_thread.start()
+        if self.iterations > self.args.iterations_before_training and self.iterations % self.args.train_frequency == 0:
+            if not self.sample_thread.isAlive():
+                self.sample_thread.start()
 
-                self.ready_queue.put(True)  # Wait for training to finish
-                self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
+            self.ready_queue.put(True)  # Wait for training to finish
+            self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
 
     def generate_samples(self):
         while True:
@@ -60,7 +59,7 @@ class Agent(object):
             self.ready_queue.get()  # Notify main thread a training has complete
             states, actions, rewards, next_states, terminals, lookaheads, idx = self.training_queue.get()
             tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
-            self.memory.update(idx, np.abs(tderror))
+            self.memory.update(idx, priority=tderror**self.args.priority_temperature)
 
 class QExplorer(Agent):
     def __init__(self, args, environment, network):
