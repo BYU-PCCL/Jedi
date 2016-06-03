@@ -1,6 +1,8 @@
 import tensorflow as tf
-
+import subprocess
+import os
 import numpy as np
+import shutil
 
 class TrainTarget(object):
     def __init__(self, Type, args, environment):
@@ -116,8 +118,15 @@ class Network(object):
 
         # Initialize
         self.sess.run(tf.initialize_all_variables())
-        tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
+        self.tensorboard()
 
+    def tensorboard(self):
+        shutil.rmtree(self.args.tf_summary_path)
+        tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
+        subprocess.Popen(["tensorboard", "--logdir=" + self.args.tf_summary_path],
+                         stdout=open(os.devnull, 'w'),
+                         stderr=open(os.devnull, 'w'),
+                         close_fds=True)
 
     @staticmethod
     def create_session(args):
