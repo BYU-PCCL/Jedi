@@ -16,7 +16,7 @@ class TrainTarget(object):
         self.lr = 0.0
         self.batch_loss = 0.0
 
-        with tf.name_scope("update") as scope:
+        with tf.name_scope(args.network_type + "-update") as scope:
             self.copy = [
                 weight.assign(args.target_network_alpha * self.train_network.weights[i] + (1.0 - args.target_network_alpha) * weight, use_locking=True)
                     for i, weight in enumerate(self.target_network.weights)
@@ -250,8 +250,8 @@ class Network(object):
         return delta, self.batch_loss
 
 class Baseline(Network):
-    def __init__(self, args, environment, name='baseline_network', sess=None):
-        with tf.variable_scope(name) as scope:
+    def __init__(self, args, environment, name='network', sess=None):
+        with tf.variable_scope("baseline-" + name) as scope:
             Network.__init__(self, args, environment, name, sess)
 
             # Build Network
@@ -265,8 +265,8 @@ class Baseline(Network):
 
 
 class Linear(Network):
-    def __init__(self, args, environment, name='linear_network', sess=None):
-        with tf.variable_scope(name) as scope:
+    def __init__(self, args, environment, name='network', sess=None):
+        with tf.variable_scope("linear-" + name) as scope:
             Network.__init__(self, args, environment, name, sess)
 
             self.fc1,    w1, b1 = self.linear(self.flatten(self.state, name="fc1"), 500, name='fc1')
@@ -276,8 +276,8 @@ class Linear(Network):
             self.post_init()
 
 class Constrained(Network):
-    def __init__(self, args, environment, name='constrained_network', sess=None):
-        with tf.variable_scope(name) as scope:
+    def __init__(self, args, environment, name='network', sess=None):
+        with tf.variable_scope("constrained-" + name) as scope:
             Network.__init__(self, args, environment, name, sess)
 
             self.conv1,     w1, b1 = self.conv2d(self.state, size=8, filters=32, stride=4, name='conv1')
@@ -307,8 +307,8 @@ class Constrained(Network):
 
 
 class Density(Network):
-    def __init__(self, args, environment, name='mdn_network', sess=None):
-        with tf.variable_scope(name) as scope:
+    def __init__(self, args, environment, name='network', sess=None):
+        with tf.variable_scope("density-" + name) as scope:
             Network.__init__(self, args, environment, name, sess)
 
             # Build Network
@@ -329,8 +329,8 @@ class Density(Network):
 
 
 class Causal(Network):
-    def __init__(self, args, environment, name='baseline_network', sess=None):
-        with tf.variable_scope(name) as scope:
+    def __init__(self, args, environment, name='network', sess=None):
+        with tf.variable_scope("causal-" + name) as scope:
             Network.__init__(self, args, environment, name, sess)
 
             # Common Perception
