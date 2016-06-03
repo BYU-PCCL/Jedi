@@ -16,16 +16,26 @@ class TrainTarget(object):
         self.lr = 0.0
         self.batch_loss = 0.0
 
-        self.copy = [
-            weight.assign(args.target_network_alpha * self.train_network.weights[i] + (1.0 - args.target_network_alpha) * weight, use_locking=True)
-                for i, weight in enumerate(self.target_network.weights)
-        ] + [
-            bias.assign(args.target_network_alpha * self.train_network.biases[i] + (1.0 - args.target_network_alpha) * bias, use_locking=True)
-                for i, bias in enumerate(self.target_network.biases)
-        ]
+        with tf.name_scope("update") as scope:
+            self.copy = [
+                weight.assign(args.target_network_alpha * self.train_network.weights[i] + (1.0 - args.target_network_alpha) * weight, use_locking=True)
+                    for i, weight in enumerate(self.target_network.weights)
+            ] + [
+                bias.assign(args.target_network_alpha * self.train_network.biases[i] + (1.0 - args.target_network_alpha) * bias, use_locking=True)
+                    for i, bias in enumerate(self.target_network.biases)
+            ]
+
+        self.tensorboard()
 
     def __len__(self):
         return len(self.train_network)
+
+    def tensorboard(self):
+        tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
+        subprocess.Popen(["tensorboard", "--logdir=" + self.args.tf_summary_path],
+                         stdout=open(os.devnull, 'w'),
+                         stderr=open(os.devnull, 'w'),
+                         close_fds=True)
 
     def update(self):
         self.sess.run(self.copy)
@@ -118,15 +128,6 @@ class Network(object):
 
         # Initialize
         self.sess.run(tf.initialize_all_variables())
-        self.tensorboard()
-
-    def tensorboard(self):
-        shutil.rmtree(self.args.tf_summary_path)
-        tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
-        subprocess.Popen(["tensorboard", "--logdir=" + self.args.tf_summary_path],
-                         stdout=open(os.devnull, 'w'),
-                         stderr=open(os.devnull, 'w'),
-                         close_fds=True)
 
     @staticmethod
     def create_session(args):
