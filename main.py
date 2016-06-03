@@ -29,6 +29,7 @@ state = environment.get_state()
 eval_pending = False
 is_evaluate = False
 
+
 # Handle Ctrl + c
 def commander(signal, frame):
     command = raw_input("\n\n {} Command [args | eval | verbose | quiet]: ".format(args.name))
@@ -86,7 +87,7 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=
 # add gray to custom gym
 
 # discussion topics with dr. wingate
-# - density network learning zeros - does he have any ideas?
+# - density network learning zeros - it appears the loss function is wrong (testing) -- go over it together
 # - causal network q-value out of control
 # - constrained network not learning yet
 # - baseline network initialization matters (sometimes q-values are super large)

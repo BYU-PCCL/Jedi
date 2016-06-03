@@ -349,7 +349,7 @@ class Causal(Network):
             self.l2b_fc_e = self.expand(self.l2b_fc, 1, name='b')  # now ?x1x32
             self.causes = self.flatten(tf.batch_matmul(self.l2a_fc_e, self.l2b_fc_e, name='causes'))
 
-            self.l4,      w6, b6 = self.linear(self.causes, 512, activation_fn='sigmoid', name='l4')
+            self.l4,      w6, b6 = self.linear(self.causes, 512, name='l4')
             self.output,  w5, b5 = self.linear(self.l4, environment.get_num_actions(), activation_fn='none', name='output')
 
             self.post_init()
