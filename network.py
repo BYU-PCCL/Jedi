@@ -9,7 +9,6 @@ class TrainTarget(object):
         self.args = args
         self.sess = Type.create_session(args)
 
-
         self.target_network = Type(args, environment, 'target', self.sess)
         self.train_network = Type(args, environment, 'train', self.sess)
 
