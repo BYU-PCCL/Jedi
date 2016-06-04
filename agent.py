@@ -24,12 +24,11 @@ class Agent(object):
         for _ in range(args.threads):
             self.threads.append(Thread(target=self.train))
             self.threads[-1].setDaemon(True)
-            self.threads[-1].start()
 
-        self.sample_threads = []
-        for _ in range(6):
-            self.sample_threads.append(Thread(target=self.generate_samples))
-            self.sample_threads[-1].setDaemon(True)
+        # self.sample_threads = []
+        # for _ in range(6):
+        #     self.sample_threads.append(Thread(target=self.generate_samples))
+        #     self.sample_threads[-1].setDaemon(True)
 
     def get_action(self, state, is_evaluate):
         self.iterations += 1
@@ -46,21 +45,27 @@ class Agent(object):
         self.memory.add(state, reward, action, terminal)
 
         if self.iterations > self.args.iterations_before_training and self.iterations % self.args.train_frequency == 0:
-            if not self.sample_threads[0].isAlive():
-                for thread in self.sample_threads:
+
+            if not self.threads[0].isAlive():
+                for thread in self.threads:
                     thread.start()
 
-            self.ready_queue.put(True)  # Wait for training to finish
+            # if not self.sample_threads[0].isAlive():
+            #     for thread in self.sample_threads:
+            #         thread.start()
+
+            #self.ready_queue.put(True)  # Wait for training to finish
             self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
 
-    def generate_samples(self):
-        while True:
-            self.training_queue.put(self.memory.sample())
+    # def generate_samples(self):
+    #     while True:
+    #         self.training_queue.put(self.memory.sample())
 
     def train(self):
         while True:
-            self.ready_queue.get()  # Notify main thread a training has complete
-            states, actions, rewards, next_states, terminals, lookaheads, idx = self.training_queue.get()
+            states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
+            #self.ready_queue.get()  # Notify main thread a training has complete
+            #self.training_queue.put()
             tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
             self.memory.update(idx, priority=tderror**self.args.priority_temperature)
 

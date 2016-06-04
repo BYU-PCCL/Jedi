@@ -74,6 +74,8 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=
 # TODO
 # HIGH
 # convergance training
+# assert not nan in train assert not np.isnan(loss_value)
+# round robin thread queues (one training queue per training thread - one sampler per trainer)
 
 # MEDIUM
 # death ends episode
