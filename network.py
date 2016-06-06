@@ -191,6 +191,7 @@ class Commander(Network):
                                                 allow_soft_placement=True,
                                                 log_device_placement=True))
 
+
     def tensorboard(self):
         tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
         subprocess.Popen(["tensorboard", "--logdir=" + self.args.tf_summary_path],
