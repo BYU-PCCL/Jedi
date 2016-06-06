@@ -54,7 +54,7 @@ class Agent(object):
             #     for thread in self.sample_threads:
             #         thread.start()
 
-            #self.ready_queue.put(True)  # Wait for training to finish
+            self.ready_queue.put(True)  # Wait for training to finish
             self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
 
     # def generate_samples(self):
@@ -64,10 +64,10 @@ class Agent(object):
     def train(self):
         while True:
             states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
-            #self.ready_queue.get()  # Notify main thread a training has complete
-            #self.training_queue.put()
-            tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
-            self.memory.update(idx, priority=tderror**self.args.priority_temperature)
+            self.ready_queue.get()  # Notify main thread a training has complete
+            #tderror, loss =
+            self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
+            #self.memory.update(idx, priority=tderror**self.args.priority_temperature)
 
 class QExplorer(Agent):
     def __init__(self, args, environment, network):
