@@ -3,6 +3,7 @@ import random
 import subprocess
 import network
 import agent
+import environment
 
 class Parameters():
     def __init__(self):
@@ -17,6 +18,7 @@ class Parameters():
 
         harness_args = self.parser.add_argument_group('Harness')
         harness_args.add_argument('--vis', action='store_const', const=True, default=False)
+        harness_args.add_argument('--test', action='store_const', const=True, default=False)
         harness_args.add_argument('--name', default="learner")
         harness_args.add_argument('--verbose', action='store_const', const=True, default=False)
         harness_args.add_argument('--deterministic', action='store_const', const=True, default=False)
@@ -29,6 +31,7 @@ class Parameters():
         environment_args = self.parser.add_argument_group('Environment')
         environment_args.add_argument('--actions_per_tick', default=1, type=int)
         environment_args.add_argument('--rom', default="breakout")
+        environment_args.add_argument('--environment_type', default="atari")
         environment_args.add_argument('--max_initial_noop', default=8, type=int)
         environment_args.add_argument('--resize_width', default=84, type=int)
         environment_args.add_argument('--resize_height', default=84, type=int)
@@ -51,6 +54,7 @@ class Parameters():
 
         network_args = self.parser.add_argument_group('Network')
         network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained'])
+        network_args.add_argument('--commander_type', default='baseline', type=str, choices=['commander', 'convergence'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.00025, type=float)
@@ -68,7 +72,7 @@ class Parameters():
         network_args.add_argument('--towers', default=1, type=int)
         network_args.add_argument('--tf_summary_path', default="/tmp/network", type=str)
         network_args.add_argument('--tf_checkpoint_path', default="/tmp/checkpoints", type=str)
-
+        network_args.add_argument('--convergence_repetitions', default=1000, type=int, help='in calls to train')
     def parse(self):
         args = self.parser.parse_args()
         ignored_args = ['verbose', 'sql_host', 'sql_db', 'sql_port', 'sql_user', 'sql_password',
@@ -77,6 +81,15 @@ class Parameters():
         changed_args = "-".join(changed_args) if len(changed_args) > 0 else "defaults"
         args.name = args.name + '-' + changed_args + '-' + str(random.randint(10000000, 99999999))
 
+        if args.test:
+            args.environment_type = 'array'
+            args.network_type = 'linear'
+            args.agent_type = 'test'
+            args.bypass_sql = True
+            args.iterations_before_training = 1000
+
+        args.commander_class = self.parse_commander(args.commander_type)
+        args.environment_class = self.parse_environment(args.environment_type)
         args.network_class = self.parse_network_type(args.network_type)
         args.agent_class = self.parse_agent_type(args.agent_type)
 
@@ -95,6 +108,10 @@ class Parameters():
 
         return args
 
+    def parse_environment(self, env_string):
+        return {'atari': environment.AtariEnvironment,
+                'array': environment.ArrayEnvironment}[env_string]
+
     def parse_agent_type(self, agent_string):
         return {'agent': agent.Agent,
                 'qexplorer': agent.QExplorer,
@@ -107,6 +124,10 @@ class Parameters():
                 'density': network.Density,
                 'causal': network.Causal,
                 'constrained': network.Constrained}[network_string]
+
+    def parse_commander(self, commander_string):
+        return {'commander': network.Commander,
+                'convergence': network.Convergence}[commander_string]
 
 
 #environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')

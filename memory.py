@@ -72,9 +72,9 @@ class Memory:
         indexes = []
         random_indexes = []
 
-        prestates = np.empty((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
-        poststates = np.empty((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
-        lookaheads = np.empty((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
+        prestates = np.zeros((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
+        poststates = np.zeros((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
+        lookaheads = np.zeros((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
 
         if self.args.use_prioritization:
             random_indexes = self.sample_priority_indexes(self.args.batch_size)
@@ -114,4 +114,4 @@ class Memory:
         rewards = self.rewards[indexes]
         terminals = self.terminals[indexes]
 
-        return prestates, actions, rewards, poststates, terminals, lookaheads, indexes
+        return prestates.copy(), actions, rewards, poststates.copy(), terminals, lookaheads.copy(), indexes

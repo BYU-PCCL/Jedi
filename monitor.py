@@ -8,7 +8,6 @@ from colorama import Fore, Style
 
 class Stats:
     def __init__(self):
-        self.stats = {}
         self.list_stats = {}
 
     def update(self, stat, value):
@@ -18,8 +17,8 @@ class Stats:
         self.list_stats[stat].append(value)
 
     def __getitem__(self, item):
-        if item in self.stats:
-            return self.stats[item]
+        if item in self.list_stats:
+            return self.list_stats[item]
 
         partition = item.partition("_")
         key = partition[2]
@@ -129,11 +128,15 @@ class Monitor:
             self.save_stat(key, stats[key]) if stats[key] != None else None
 
     def print_stats(self, stats, evaluation=False):
-        actions = np.zeros(self.environment.get_num_actions())
+
+        actions = np.zeros(1, dtype=np.int)
         if evaluation:
-            for action in self.agent.memory.actions[0:self.agent.memory.count]:
+            actions = np.zeros(self.environment.get_num_actions())
+            stat_actions = stats['action'] if type(stats['action']) is list else []
+
+            for action in stat_actions:
                 actions[action] += 1.0
-            actions /= np.sum(actions)
+            actions = np.array((actions / np.sum(actions)) * 100, dtype=np.uint32)
 
         log = " |  episodes: {}  " \
               "max q: {:<8.4f} " \
@@ -142,7 +145,7 @@ class Monitor:
               "eps: {:<9.5} " \
               "loss: {:<10.6f}  " \
               "actions: {}".format(self.environment.get_episodes(),
-                                  float(stats['max_q']) if stats['max_q'] is not None else 0.0,
+                                  float(stats['max_q']),
                                   stats['min_score'],
                                   stats['max_score'],
                                   float(self.network.lr),
@@ -155,10 +158,10 @@ class Monitor:
         if evaluation:
             print(Fore.GREEN, log, Style.RESET_ALL)
         else:
-            print(" " + log, end="")
+            print(" " + log, end="\r")
 
 
-    def monitor(self, state, reward, terminal, q_values, is_evaluate):
+    def monitor(self, state, reward, terminal, q_values, action, is_evaluate):
         self.iterations += 1
 
         if self.args.vis:
@@ -169,7 +172,8 @@ class Monitor:
 
         for stats in [self.console_stats, self.episode_stats, self.eval_stats]:
             if stats is not None:
-                stats.update('q', np.max(q_values))
+                stats.update('q', np.max(q_values) or 0.0)
+                stats.update('action', action)
 
                 if terminal:
                     stats.update('score', self.environment.get_score())

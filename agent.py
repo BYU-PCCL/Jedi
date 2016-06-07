@@ -15,7 +15,7 @@ class Agent(object):
         self.memory = Memory(args, environment)
         self.epsilon = 1
         self.iterations = 0
-        self.ready_queue = Queue.Queue(maxsize=10 * self.args.threads)
+        self.ready_queue = Queue.Queue(maxsize=self.args.threads)
 
         self.phi = np.zeros(tuple([args.phi_frames]) + environment.get_state_space(), dtype=np.uint8)
 
@@ -39,7 +39,6 @@ class Agent(object):
         self.memory.add(state, reward, action, terminal)
 
         if self.iterations > self.args.iterations_before_training and self.iterations % self.args.train_frequency == 0:
-
             if not self.threads[0].isAlive():
                 for thread in self.threads:
                     thread.start()
@@ -49,10 +48,9 @@ class Agent(object):
 
     def train(self, id):
         while True:
-            states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
             self.ready_queue.get()  # Notify main thread a training has complete
+            states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
             tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
-
             self.memory.update(idx, priority=tderror**self.args.priority_temperature)
 
 
@@ -63,7 +61,7 @@ class Test(Agent):
         self.policy_test = environment.generate_test()
         ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.policy_test
 
-        for _ in range(8000):
+        for _ in range(1000):
             error, loss = self.network.train(ideal_states, ideal_actions, ideal_terminals, ideal_next_states, ideal_rewards, None)
 
             policy, qs = self.network.q([[[s] for _ in range(self.args.phi_frames)] for s in range(self.environment.size)])
@@ -73,13 +71,8 @@ class Test(Agent):
                   np.max(goal_q), \
                   loss
 
-
         for s in range(self.environment.size):
             print s if s != self.environment.goal else '-', list(self.network.q([[[s] for _ in range(self.args.phi_frames)]])[1][0])
-
-        self.network.tensorboard_process.kill()
-
-        quit()
 
 
 class QExplorer(Agent):

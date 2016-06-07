@@ -17,8 +17,8 @@ random.seed(args.random_seed)
 np.random.seed(args.random_seed)
 
 # Initialize
-environment = AtariEnvironment(args)
-network = Commander(args.network_class, args, environment)
+environment = args.environment_class(args)
+network = args.commander_class(args.network_class, args, environment)
 agent = args.agent_class(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
 
@@ -48,7 +48,7 @@ def commander(signal, frame):
 signal.signal(signal.SIGINT, commander)
 
 # Main Loop
-for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.001, smoothing=.001,
+for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothing=.001,
                  bar_format='{percentage:3.0f}% | {bar} | {n_fmt} [{elapsed}, {rate_fmt}]'):
 
     # Determine if we should evaluate this episode or not
@@ -61,7 +61,7 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.001, smoothing
 
     # Log stats and visualize
     if tick >= args.iterations_before_training:
-        monitor.monitor(state, reward, terminal, q_values, is_evaluate)
+        monitor.monitor(state, reward, terminal, q_values, action, is_evaluate)
     elif tick == 0:
         print("   ({} iterations before training)".format(args.iterations_before_training), end="")
 

@@ -94,7 +94,7 @@ class Network:
         return tf.placeholder('int' + str(bits), shape, name=name)
 
     def loss(self, processed_delta, prediction, truth):
-        return tf.reduce_sum(tf.square(processed_delta, name='square'), name='loss')
+        return tf.reduce_mean(tf.square(processed_delta, name='square'), name='loss')
 
     def optimizer(self, learning_rate):
         return tf.train.RMSPropOptimizer(learning_rate=learning_rate,
@@ -136,12 +136,8 @@ class Commander(Network):
             self.terminals = self.int([None], name='terminal')
             self.rewards = self.int([None], name='reward', bits=32)
 
-        with tf.variable_scope('target_network'), tf.name_scope('thread_actor'):
-                self.qs = network.build(states=self.environment_scale(self.states))
-                self.qs_argmax = self.argmax(self.qs)
-
         with tf.device('/gpu:0'):
-            with tf.variable_scope('target_network', reuse=True):  # Target network variables were created by thread_actor
+            with tf.variable_scope('target_network'):  # Target network variables were created by thread_actor
                 next_qs = network.build(states=self.environment_scale(self.next_states))
                 next_best_qs = self.max(next_qs)
 
@@ -158,12 +154,15 @@ class Commander(Network):
                     delta = target_q - train_acted_qs
                     processed_delta = tf.clip_by_value(delta, -1.0, 1.0) if self.args.clip_tderror else delta
 
-
                 self.tderror = delta
                 self.loss_op = network.loss(processed_delta, prediction=train_acted_qs, truth=target_q)
 
                 gradient = optimizer.compute_gradients(self.loss_op)
                 gradients += [(tf.truediv(grad, self.to_float(self.args.towers)), var) for grad, var in gradient if grad is not None]
+
+        with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
+            self.qs = network.build(states=self.environment_scale(self.states))
+            self.qs_argmax = self.argmax(self.qs)
 
         self.target_vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='target_network')
         self.train_vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='train_network')
@@ -227,34 +226,44 @@ class Commander(Network):
     def q(self, states):
         return self.sess.run([self.qs_argmax, self.qs], feed_dict={self.states: states})
 
-    def average_gradients(self, tower_grads):
-        with tf.name_scope('average_gradients'):
+class Convergence(Commander):
+    def __init__(self, Type, args, environment):
+        Commander.__init__(self, Type, args, environment)
 
-            average_grads = []
-            for grad_and_vars in zip(*tower_grads):
+        # self.clear_ops = []
+        # vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='train_network')
 
-                # Note that each grad_and_vars looks like the following:
-                #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
-                grads = []
-                for gradient, variable in grad_and_vars:
-                    if gradient is not None:
-                        expanded_g = tf.expand_dims(gradient, 0) # add tower dim
-                        grads.append(expanded_g)
-
-                if len(grads) > 0:
-                    # Average over the 'tower' dimension.
-                    grad = tf.concat(0, grads)
-                    grad = tf.reduce_mean(grad, 0)
-
-                    # Keep in mind that the Variables are redundant because they are shared
-                    # across towers. So .. we will just return the first tower's pointer to
-                    # the Variable.
-                    v = grad_and_vars[0][1]
-                    grad_and_var = (grad, v)
-                    average_grads.append(grad_and_var)
-            return average_grads
+        # for var in vars:
+            # newvar = (1 - mask) * variables + mask * random
+            # self.clear_ops.append(var.assign(newvar))
 
 
+    def clear(self):
+        self.sess.run(self.clear_ops)
+
+    def train(self, states, actions, terminals, next_states, rewards, lookahead=None):
+
+        self.training_iterations += 1
+
+        data = {
+            self.states: states,
+            self.actions: actions,
+            self.terminals: terminals,
+            self.rewards: rewards,
+            self.next_states: next_states
+        }
+
+        for _ in range(self.args.convergence_repetitions):
+            _, error, self.batch_loss, self.lr = self.sess.run([self.train_op,
+                                                               self.tderror,
+                                                               self.loss_op,
+                                                               self.learning_rate],
+                                                               feed_dict=data)
+
+        self.update()
+        self.clear()
+
+        return error, self.batch_loss
 
 class Baseline(Network):
     def __init__(self, args, environment):
