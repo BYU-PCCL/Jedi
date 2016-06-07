@@ -12,7 +12,7 @@ class Network:
         self.default_initializer = args.initializer
 
     def one_hot(self, source, size, name='onehot'):
-        return tf.one_hot(source, size, 1.0, 0.0, name=name)
+        return tf.one_hot(tf.cast(source, 'int64'), size, 1.0, 0.0, name=name)
 
     def argmax(self, source, name='argmax'):
         return tf.argmax(source, dimension=1)
@@ -53,17 +53,15 @@ class Network:
             'none': None}[activation]
 
     def linear(self, source, output_size, stddev=0.02, initializer='default', bias_start=0.01, activation_fn='relu',
-               name='linear', w=None, b=None):
+               name='linear'):
         shape = source.get_shape().as_list()
 
         initializer = self.parse_initializer(initializer, stddev)
         activation_fn = self.parse_activation(activation_fn)
 
         with tf.variable_scope(name + '_linear') as scope:
-            if w is None:
-                w = tf.get_variable("weight", [shape[1], output_size], tf.float32, initializer)
-            if b is None:
-                b = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(bias_start))
+            w = tf.get_variable("weight", [shape[1], output_size], tf.float32, initializer)
+            b = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(bias_start))
 
             out = tf.nn.bias_add(tf.matmul(source, w), b)
             activated = activation_fn(out) if activation_fn is not None else out
@@ -71,16 +69,14 @@ class Network:
             return activated, w, b
 
     def conv2d(self, source, size, filters, stride, padding='SAME', stddev=0.02, initializer='default', bias_start=0.01,
-               activation_fn='relu', name='conv2d', w=None, b=None):
+               activation_fn='relu', name='conv2d'):
         shape = source.get_shape().as_list()
         initializer = self.parse_initializer(initializer, stddev)
-        activation_fn = tf.nn.relu if activation_fn == 'relu' else None
+        activation_fn = self.parse_activation(activation_fn)
 
         with tf.variable_scope(name + '_conv2d') as scope:
-            if w is None:
-                w = tf.get_variable("weight", shape=[size, size, shape[1], filters], initializer=initializer)
-            if b is None:
-                b = tf.get_variable("bias", [filters], initializer=tf.constant_initializer(bias_start))
+            w = tf.get_variable("weight", shape=[size, size, shape[1], filters], initializer=initializer)
+            b = tf.get_variable("bias", [filters], initializer=tf.constant_initializer(bias_start))
 
             c = tf.nn.conv2d(source, w, strides=[1, 1, stride, stride], padding=padding, data_format='NCHW')
             out = tf.nn.bias_add(c, b, data_format='NCHW')
@@ -91,17 +87,23 @@ class Network:
     def float(self, shape, name='float'):
         return tf.placeholder('float32', shape, name=name)
 
-    def int(self, shape, name='int'):
-        return tf.placeholder('int64', shape, name=name)
+    def to_float(self, source):
+        return tf.cast(source, 'float32')
+
+    def int(self, shape, name='int', bits=8):
+        return tf.placeholder('int' + str(bits), shape, name=name)
 
     def loss(self, processed_delta, prediction, truth):
-        return tf.reduce_sum(tf.square(processed_delta, name='square'), name='loss')
+        return tf.reduce_mean(tf.square(processed_delta, name='square'), name='loss')
 
     def optimizer(self, learning_rate):
         return tf.train.RMSPropOptimizer(learning_rate=learning_rate,
                                          decay=self.args.rms_decay,
                                          momentum=float(self.args.rms_momentum),
                                          epsilon=self.args.rms_eps)
+
+    def environment_scale(self, states):
+        return tf.truediv(tf.to_float(states), tf.to_float(self.environment.max_state_value()))
 
 class Commander(Network):
     def __init__(self, Type, args, environment):
@@ -116,68 +118,60 @@ class Commander(Network):
         network = Type(args, environment)
 
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        self.learning_rate = tf.maximum(self.args.learning_rate_end,
+                                           tf.train.exponential_decay(
+                                             self.args.learning_rate_start,
+                                             self.global_step,
+                                             self.args.learning_rate_decay_step,
+                                             self.args.learning_rate_decay,
+                                             staircase=False))
 
-        with tf.device('/gpu:0'):
-            optimizer = network.optimizer(learning_rate=self.args.learning_rate_end)
+        with tf.device('/gpu:1'):
+            optimizer = network.optimizer(learning_rate=self.learning_rate)
 
         with tf.name_scope('inputs') as _:
-            self.states = self.float([None, args.phi_frames] + list(environment.get_state_space()), name='state')
-            self.next_states = self.float([None, args.phi_frames] + list(environment.get_state_space()), name='state')
+            self.states = self.int([None, args.phi_frames] + list(environment.get_state_space()), name='state')
+            self.next_states = self.int([None, args.phi_frames] + list(environment.get_state_space()), name='next_state')
             self.actions = self.int([None], name='action_index')
-            self.terminals = self.float([None], name='terminal')
-            self.rewards = self.float([None], name='reward')
+            self.terminals = self.int([None], name='terminal')
+            self.rewards = self.int([None], name='reward', bits=32)
 
-        with tf.name_scope('split_inputs') as _:
-            assert self.args.batch_size % self.args.towers == 0, "Error: Threads must divide batch_size evenly"
-            states = tf.split(split_dim=0, num_split=self.args.towers, value=self.states)
-            actions = tf.split(split_dim=0, num_split=self.args.towers, value=self.actions)
-            terminals = tf.split(split_dim=0, num_split=self.args.towers, value=self.terminals)
-            next_states = tf.split(split_dim=0, num_split=self.args.towers, value=self.next_states)
-            rewards = tf.split(split_dim=0, num_split=self.args.towers, value=self.rewards)
+        with tf.device('/gpu:0'):
+            with tf.variable_scope('target_network'):  # Target network variables were created by thread_actor
+                next_qs = network.build(states=self.environment_scale(self.next_states))
+                next_best_qs = self.max(next_qs)
 
-        with tf.name_scope('thread_actor'), tf.variable_scope('target_network'):
-                self.qs = network.build(states=self.states)
-                self.qs_argmax = self.argmax(self.qs)
+            with tf.variable_scope('train_network'):
+                train_qs = network.build(states=self.environment_scale(self.states))
+                train_acted_qs = self.sum(train_qs * self.one_hot(self.actions, environment.get_num_actions()))
 
-        for n in range(self.args.towers):
-            with tf.name_scope('thread_{}'.format(n)):
-
-                processed_rewards = tf.clip_by_value(rewards[n], -1.0, 1.0, name='clip_reward') if self.args.clip_reward else rewards[n]
-
-                # Target network variables were created by thread_actor
-                with tf.variable_scope('target_network', reuse=True) as scope:
-                    next_qs = network.build(states=next_states[n] / float(environment.max_state_value()))
-                    next_best_qs = tf.stop_gradient(self.max(next_qs))
-
-                with tf.variable_scope('train_network', reuse=n > 0) as scope:
-                    train_qs = network.build(states=states[n] / float(environment.max_state_value()))
-                    train_acted_qs = self.sum(train_qs * self.one_hot(actions[n], environment.get_num_actions()))
-
+            with tf.device('/gpu:1'):
                 with tf.name_scope('target_q'):
-                    target_q = processed_rewards + self.args.discount * (1.0 - terminals[n]) * next_best_qs
+                    processed_rewards = tf.clip_by_value(self.rewards, -1, 1, name='clip_reward') if self.args.clip_reward else self.rewards
+                    target_q = tf.stop_gradient(self.to_float(processed_rewards) + self.args.discount * (1.0 - self.to_float(self.terminals)) * next_best_qs)
 
                 with tf.name_scope('delta'):
-                    delta = train_acted_qs - target_q
+                    delta = target_q - train_acted_qs
                     processed_delta = tf.clip_by_value(delta, -1.0, 1.0) if self.args.clip_tderror else delta
 
-                with tf.name_scope('loss'):
-                    loss = network.loss(processed_delta, prediction=train_acted_qs, truth=target_q)
+                self.tderror = delta
+                self.loss_op = network.loss(processed_delta, prediction=train_acted_qs, truth=target_q)
 
-                self.train_op = optimizer.minimize(loss, global_step=self.global_step)
+                gradient = optimizer.compute_gradients(self.loss_op)
+                gradients += [(tf.truediv(grad, self.to_float(self.args.towers)), var) for grad, var in gradient if grad is not None]
 
-                # with tf.device('/gpu:1'):
-                #     gradient = optimizer.compute_gradients(loss, colocate_gradients_with_ops=True)
-                #     gradients.append(gradient)
+        with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
+            self.qs = network.build(states=self.environment_scale(self.states))
+            self.qs_argmax = self.argmax(self.qs)
 
-        self.target_vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='target')
-        self.train_vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='train')
+        self.target_vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='target_network')
+        self.train_vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='train_network')
 
         with tf.name_scope('copy'):
             self.assign_ops = [target.assign(train) for target, train in zip(self.target_vars, self.train_vars)]
 
-        # with tf.device('/gpu:1'):
-        #     gradient = self.average_gradients(gradients)
-        #     self.train_op = optimizer.apply_gradients(gradient, global_step=self.global_step)
+        with tf.device('/gpu:1'):
+            self.train_op = optimizer.apply_gradients(gradients, global_step=self.global_step)
 
         init_op = tf.initialize_all_variables()
 
@@ -191,13 +185,15 @@ class Commander(Network):
         tf.set_random_seed(args.random_seed)
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_fraction,
                                     allow_growth=True)
+
         return tf.Session(config=tf.ConfigProto(gpu_options=gpu_options,
+                                                allow_soft_placement=True,
                                                 log_device_placement=self.args.verbose))
 
 
     def tensorboard(self):
         tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
-        subprocess.Popen(["tensorboard", "--logdir=" + self.args.tf_summary_path],
+        self.tensorboard_process = subprocess.Popen(["tensorboard", "--logdir=" + self.args.tf_summary_path],
                          stdout=open(os.devnull, 'w'),
                          stderr=open(os.devnull, 'w'),
                          close_fds=True)
@@ -215,40 +211,20 @@ class Commander(Network):
             self.next_states: next_states
         }
 
-        _, self.training_iterations = self.sess.run([self.train_op, self.global_step], feed_dict=data)
+        _, error, self.batch_loss, self.lr, self.training_iterations = self.sess.run([self.train_op,
+                                                                           self.tderror,
+                                                                           self.loss_op,
+                                                                           self.learning_rate,
+                                                                           self.global_step],
+                                                                          feed_dict=data)
 
         if self.training_iterations % self.args.copy_frequency == 0:
             self.update()
 
+        return error, self.batch_loss
+
     def q(self, states):
         return self.sess.run([self.qs_argmax, self.qs], feed_dict={self.states: states})
-
-    def average_gradients(self, tower_grads):
-        with tf.name_scope('average_gradients'):
-
-            average_grads = []
-            for grad_and_vars in zip(*tower_grads):
-
-                # Note that each grad_and_vars looks like the following:
-                #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
-                grads = []
-                for gradient, variable in grad_and_vars:
-                    if gradient is not None:
-                        expanded_g = tf.expand_dims(gradient, 0) # add tower dim
-                        grads.append(expanded_g)
-
-                if len(grads) > 0:
-                    # Average over the 'tower' dimension.
-                    grad = tf.concat(0, grads)
-                    grad = tf.reduce_mean(grad, 0)
-
-                    # Keep in mind that the Variables are redundant because they are shared
-                    # across towers. So .. we will just return the first tower's pointer to
-                    # the Variable.
-                    v = grad_and_vars[0][1]
-                    grad_and_var = (grad, v)
-                    average_grads.append(grad_and_var)
-            return average_grads
 
 
 

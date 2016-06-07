@@ -15,20 +15,14 @@ class Agent(object):
         self.memory = Memory(args, environment)
         self.epsilon = 1
         self.iterations = 0
-        self.training_queue = Queue.Queue(maxsize=args.threads)
-        self.ready_queue = Queue.Queue(maxsize=args.threads)
+        self.ready_queue = Queue.Queue(maxsize=self.args.threads)
 
         self.phi = np.zeros(tuple([args.phi_frames]) + environment.get_state_space(), dtype=np.uint8)
 
         self.threads = []
-        for _ in range(args.threads):
-            self.threads.append(Thread(target=self.train))
+        for id in range(args.threads):
+            self.threads.append(Thread(target=self.train, args=[id]))
             self.threads[-1].setDaemon(True)
-
-        # self.sample_threads = []
-        # for _ in range(6):
-        #     self.sample_threads.append(Thread(target=self.generate_samples))
-        #     self.sample_threads[-1].setDaemon(True)
 
     def get_action(self, state, is_evaluate):
         self.iterations += 1
@@ -45,29 +39,41 @@ class Agent(object):
         self.memory.add(state, reward, action, terminal)
 
         if self.iterations > self.args.iterations_before_training and self.iterations % self.args.train_frequency == 0:
-
             if not self.threads[0].isAlive():
                 for thread in self.threads:
                     thread.start()
 
-            # if not self.sample_threads[0].isAlive():
-            #     for thread in self.sample_threads:
-            #         thread.start()
-
             self.ready_queue.put(True)  # Wait for training to finish
             self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
 
-    # def generate_samples(self):
-    #     while True:
-    #         self.training_queue.put(self.memory.sample())
-
-    def train(self):
+    def train(self, id):
         while True:
-            states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
             self.ready_queue.get()  # Notify main thread a training has complete
-            #tderror, loss =
-            self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
-            #self.memory.update(idx, priority=tderror**self.args.priority_temperature)
+            states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
+            tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
+            self.memory.update(idx, priority=tderror**self.args.priority_temperature)
+
+
+class Test(Agent):
+    def __init__(self, args, environment, network):
+        Agent.__init__(self, args, environment, network)
+
+        self.policy_test = environment.generate_test()
+        ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.policy_test
+
+        for _ in range(1000):
+            error, loss = self.network.train(ideal_states, ideal_actions, ideal_terminals, ideal_next_states, ideal_rewards, None)
+
+            policy, qs = self.network.q([[[s] for _ in range(self.args.phi_frames)] for s in range(self.environment.size)])
+            _, goal_q = self.network.q([[[self.environment.goal - 1] for _ in range(self.args.phi_frames)]])
+            print self.network.training_iterations, \
+                  "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)), \
+                  np.max(goal_q), \
+                  loss
+
+        for s in range(self.environment.size):
+            print s if s != self.environment.goal else '-', list(self.network.q([[[s] for _ in range(self.args.phi_frames)]])[1][0])
+
 
 class QExplorer(Agent):
     def __init__(self, args, environment, network):

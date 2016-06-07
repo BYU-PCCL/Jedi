@@ -40,11 +40,11 @@ class ArrayEnvironment:
 
     def transition(self, state, action):
         if action == 1:
-            #return [(state[0] + 1) % self.size]
-            return [min(state[0] + 1, self.size - 1)]
+            return [(state[0] + 1) % self.size]
+            #return [min(state[0] + 1, self.size - 1)]
         else:
-            #return [(state[0] - 1) % self.size]
-            return [max(0, (state[0] - 1))]
+            return [(state[0] - 1) % self.size]
+            #return [max(0, (state[0] - 1))]
 
     def get_episodes(self):
         return self.episodes
@@ -80,9 +80,9 @@ class ArrayEnvironment:
 
         for state in range(self.size):
             for action in range(2):
-                states.append([state])
+                states.append([[state] for _ in range(self.args.phi_frames)])
                 rewards.append(self.reward([state], action))
-                next_states.append([self.transition([state], action)])
+                next_states.append([self.transition([state], action) for _ in range(self.args.phi_frames)])
                 actions.append(action)
 
                 terminals.append(next_states[-1][0][0] == self.goal)

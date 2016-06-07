@@ -17,7 +17,7 @@ random.seed(args.random_seed)
 np.random.seed(args.random_seed)
 
 # Initialize
-environment = ArrayEnvironment(args)
+environment = args.environment_class(args)
 network = Commander(args.network_class, args, environment)
 agent = args.agent_class(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
@@ -48,7 +48,7 @@ def commander(signal, frame):
 signal.signal(signal.SIGINT, commander)
 
 # Main Loop
-for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=1, smoothing=.001,
+for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothing=.001,
                  bar_format='{percentage:3.0f}% | {bar} | {n_fmt} [{elapsed}, {rate_fmt}]'):
 
     # Determine if we should evaluate this episode or not
@@ -61,7 +61,7 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=1, smoothing=.00
 
     # Log stats and visualize
     if tick >= args.iterations_before_training:
-        monitor.monitor(state, reward, terminal, q_values, is_evaluate)
+        monitor.monitor(state, reward, terminal, q_values, action, is_evaluate)
     elif tick == 0:
         print("   ({} iterations before training)".format(args.iterations_before_training), end="")
 
@@ -75,7 +75,7 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=1, smoothing=.00
 # HIGH
 # convergance training
 # assert not nan in train assert not np.isnan(loss_value)
-# round robin thread queues (one training queue per training thread - one sampler per trainer)
+# parameterize environment
 
 # MEDIUM
 # death ends episode
@@ -94,3 +94,8 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=1, smoothing=.00
 # - constrained network not learning yet
 # - when prioritizing -- do we prioritize based on delta, or clipped_delta? probably delta...
 # - high level: what are we testing? where are we hoping this takes us? how can we better prepare for a paper?
+
+# findings:
+# clipping the error, but NOT clipping the reward results in very strange behavior, after playing with the clipping values
+# it seems that any activation of the clipping function causes problems (clipping at 49.0 vs 50) -- evidence that error clipping
+# is a terrible way to handle issues
