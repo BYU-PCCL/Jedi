@@ -18,7 +18,7 @@ class Agent(object):
         self.training_queue = Queue.Queue(maxsize=args.threads)
         self.ready_queue = Queue.Queue(maxsize=args.threads)
 
-        self.phi = np.zeros([args.phi_frames, args.resize_height, args.resize_width], dtype=np.uint8)
+        self.phi = np.zeros(tuple([args.phi_frames]) + environment.get_state_space(), dtype=np.uint8)
 
         self.threads = []
         for _ in range(args.threads):

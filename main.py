@@ -17,7 +17,7 @@ random.seed(args.random_seed)
 np.random.seed(args.random_seed)
 
 # Initialize
-environment = AtariEnvironment(args)
+environment = ArrayEnvironment(args)
 network = Commander(args.network_class, args, environment)
 agent = args.agent_class(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
@@ -48,7 +48,7 @@ def commander(signal, frame):
 signal.signal(signal.SIGINT, commander)
 
 # Main Loop
-for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=.001, smoothing=.001,
+for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=1, smoothing=.001,
                  bar_format='{percentage:3.0f}% | {bar} | {n_fmt} [{elapsed}, {rate_fmt}]'):
 
     # Determine if we should evaluate this episode or not

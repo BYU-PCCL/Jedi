@@ -1,6 +1,7 @@
 import random
 import numpy as np
 import gym
+import time
 import cv2
 
 class ArrayEnvironment:
@@ -39,11 +40,11 @@ class ArrayEnvironment:
 
     def transition(self, state, action):
         if action == 1:
-            return [(state[0] + 1) % self.size]
-            #return [min(state[0] + 1, self.size - 1)]
+            #return [(state[0] + 1) % self.size]
+            return [min(state[0] + 1, self.size - 1)]
         else:
-            return [(state[0] - 1) % self.size]
-            #return [max(0, (state[0] - 1))]
+            #return [(state[0] - 1) % self.size]
+            return [max(0, (state[0] - 1))]
 
     def get_episodes(self):
         return self.episodes

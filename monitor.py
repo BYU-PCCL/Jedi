@@ -135,11 +135,11 @@ class Monitor:
 
     def print_stats(self, stats, evaluation=False):
 
-        # policy = "-"
-        # qs = [0.0]
-        # if self.policy_test:
-        #     policy, qs = self.network.q(self.ideal_states)
-        #     policy = "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy))
+        policy = "-"
+        qs = [0.0]
+        if self.policy_test:
+            policy, qs = self.network.q(self.ideal_states)
+            policy = "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy))
 
         actions = np.zeros(self.environment.get_num_actions())
         if evaluation:
@@ -153,21 +153,22 @@ class Monitor:
               "lr: {:<11.7f} " \
               "eps: {:<9.5} " \
               "loss: {:<10.6f}  " \
-              "actions: {} ".format(self.environment.get_episodes(),
+              "actions: {}, policy: {}".format(self.environment.get_episodes(),
                                   float(stats['max_q']) if stats['max_q'] is not None else 0.0,
                                   stats['min_score'],
                                   stats['max_score'],
                                   float(self.network.lr),
                                   float(self.agent.epsilon),
                                   float(self.network.batch_loss),
-                                  np.array_str(actions, precision=2))
+                                  np.array_str(actions, precision=2),
+                                  policy)
 
         self.console_stats = Stats()
 
         if evaluation:
             print(Fore.GREEN, log, Style.RESET_ALL)
         else:
-            print(" " + log, end="")
+            print(" " + log, end="\n")
 
 
     def monitor(self, state, reward, terminal, q_values, is_evaluate):
@@ -194,7 +195,7 @@ class Monitor:
                 self.print_stats(self.eval_stats, True)
                 self.eval_stats = None
 
-        elif self.iterations % self.args.console_frequency == 1:
+        elif (self.iterations + 1) % self.args.console_frequency == 0:
             self.print_stats(self.console_stats)
             self.commit()
 

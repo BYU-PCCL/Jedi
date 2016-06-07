@@ -44,7 +44,7 @@ class Parameters():
         agent_args.add_argument('--exploration_epsilon_decay', default=1000000, type=int, help='in calls to train')
         agent_args.add_argument('--exploration_epsilon_evaluation', default=.05, type=int, help='epsilon for evaluation')
         agent_args.add_argument('--train_frequency', default=3, type=int, help='in ticks')
-        agent_args.add_argument('--threads', default=4, type=int)
+        agent_args.add_argument('--threads', default=6, type=int)
         agent_args.add_argument('--lookahead', default=10, type=int, help='in frames')
         agent_args.add_argument('--use_prioritization', action='store_const', const=True, default=False)
         agent_args.add_argument('--priority_temperature', default=4.0, type=float, help='n where tderror^n')
@@ -65,6 +65,7 @@ class Parameters():
         network_args.add_argument('--copy_frequency', default=2500, type=int, help='in calls to train')
         network_args.add_argument('--clip_reward', default=1, type=int)
         network_args.add_argument('--clip_tderror', default=1, type=int)
+        network_args.add_argument('--towers', default=1, type=int)
         network_args.add_argument('--tf_summary_path', default="/tmp/network", type=str)
         network_args.add_argument('--tf_checkpoint_path', default="/tmp/checkpoints", type=str)
 
