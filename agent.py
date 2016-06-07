@@ -50,7 +50,7 @@ class Agent(object):
         while True:
             self.ready_queue.get()  # Notify main thread a training has complete
             states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
-            tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
+            tderror, loss = self.network.train([states], [actions], [terminals], [next_states], [rewards], [lookaheads])
             self.memory.update(idx, priority=tderror**self.args.priority_temperature)
 
 
@@ -62,7 +62,7 @@ class Test(Agent):
         ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.policy_test
 
         for _ in range(1000):
-            error, loss = self.network.train(ideal_states, ideal_actions, ideal_terminals, ideal_next_states, ideal_rewards, None)
+            error, loss = self.network.train([ideal_states], [ideal_actions], [ideal_terminals], [ideal_next_states], [ideal_rewards], None)
 
             policy, qs = self.network.q([[[s] for _ in range(self.args.phi_frames)] for s in range(self.environment.size)])
             _, goal_q = self.network.q([[[self.environment.goal - 1] for _ in range(self.args.phi_frames)]])
@@ -74,6 +74,23 @@ class Test(Agent):
         for s in range(self.environment.size):
             print s if s != self.environment.goal else '-', list(self.network.q([[[s] for _ in range(self.args.phi_frames)]])[1][0])
 
+
+class Convergence(Agent):
+    def __init__(self, args, environment, network):
+        assert args.commander_type == 'convergence', 'Convergence Agent must use Convergence Commander'
+        Agent.__init__(self, args, environment, network)
+
+    def train(self, id):
+        while True:
+            self.ready_queue.get()  # Notify main thread a training has complete
+
+            for _ in range(10):
+                states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
+                tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
+                self.memory.update(idx, priority=tderror ** self.args.priority_temperature)
+
+            self.network.update()
+            self.network.clear()
 
 class QExplorer(Agent):
     def __init__(self, args, environment, network):

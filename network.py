@@ -212,11 +212,11 @@ class Commander(Network):
         }
 
         _, error, self.batch_loss, self.lr, self.training_iterations = self.sess.run([self.train_op,
-                                                                           self.tderror,
-                                                                           self.loss_op,
-                                                                           self.learning_rate,
-                                                                           self.global_step],
-                                                                          feed_dict=data)
+                                                                                      self.tderror,
+                                                                                      self.loss_op,
+                                                                                      self.learning_rate,
+                                                                                      self.global_step],
+                                                                                      feed_dict=data)
 
         if self.training_iterations % self.args.copy_frequency == 0:
             self.update()
@@ -228,6 +228,7 @@ class Commander(Network):
 
 class Convergence(Commander):
     def __init__(self, Type, args, environment):
+        assert args.agent_type == 'convergence', 'Convergence Commander must use Convergence Agent'
         Commander.__init__(self, Type, args, environment)
 
         # self.clear_ops = []
@@ -237,13 +238,10 @@ class Convergence(Commander):
             # newvar = (1 - mask) * variables + mask * random
             # self.clear_ops.append(var.assign(newvar))
 
-
     def clear(self):
         self.sess.run(self.clear_ops)
 
     def train(self, states, actions, terminals, next_states, rewards, lookahead=None):
-
-        self.training_iterations += 1
 
         data = {
             self.states: states,
@@ -253,15 +251,12 @@ class Convergence(Commander):
             self.next_states: next_states
         }
 
-        for _ in range(self.args.convergence_repetitions):
-            _, error, self.batch_loss, self.lr = self.sess.run([self.train_op,
-                                                               self.tderror,
-                                                               self.loss_op,
-                                                               self.learning_rate],
-                                                               feed_dict=data)
-
-        self.update()
-        self.clear()
+        _, error, self.batch_loss, self.lr, self.training_iterations = self.sess.run([self.train_op,
+                                                                               self.tderror,
+                                                                               self.loss_op,
+                                                                               self.learning_rate,
+                                                                               self.global_step],
+                                                                              feed_dict=data)
 
         return error, self.batch_loss
 
