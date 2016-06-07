@@ -35,7 +35,7 @@ class Parameters():
         environment_args.add_argument('--buffer_size', default=2, type=int, help='number of frames to max')
 
         agent_args = self.parser.add_argument_group('Agent')
-        agent_args.add_argument('--agent_type', default='agent', type=str, choices=['agent', 'qexplorer', 'density'])
+        agent_args.add_argument('--agent_type', default='agent', type=str, choices=['agent', 'qexplorer', 'density', 'test'])
         agent_args.add_argument('--phi_frames', default=4, type=int)
         agent_args.add_argument('--replay_memory_size', default=1000000, type=int)
         agent_args.add_argument('--batch_size', default=32, type=int)
@@ -44,7 +44,7 @@ class Parameters():
         agent_args.add_argument('--exploration_epsilon_decay', default=1000000, type=int, help='in calls to train')
         agent_args.add_argument('--exploration_epsilon_evaluation', default=.05, type=int, help='epsilon for evaluation')
         agent_args.add_argument('--train_frequency', default=3, type=int, help='in ticks')
-        agent_args.add_argument('--threads', default=6, type=int)
+        agent_args.add_argument('--threads', default=10, type=int)
         agent_args.add_argument('--lookahead', default=10, type=int, help='in frames')
         agent_args.add_argument('--use_prioritization', action='store_const', const=True, default=False)
         agent_args.add_argument('--priority_temperature', default=4.0, type=float, help='n where tderror^n')
@@ -98,6 +98,7 @@ class Parameters():
     def parse_agent_type(self, agent_string):
         return {'agent': agent.Agent,
                 'qexplorer': agent.QExplorer,
+                'test': agent.Test,
                 'density': agent.DensityExplorer}[agent_string]
 
     def parse_network_type(self, network_string):

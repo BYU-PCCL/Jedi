@@ -55,11 +55,6 @@ class Monitor:
         self.cur = self.conn.cursor()
         self.save_config(args)
 
-        self.policy_test = environment.generate_test()
-        if self.policy_test:
-            ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.policy_test
-            self.ideal_states = [[state] for i, state in enumerate(ideal_states) if ideal_actions[i] == 0]
-
         if args.vis:
             self.initialize_visualization()
 
@@ -134,13 +129,6 @@ class Monitor:
             self.save_stat(key, stats[key]) if stats[key] != None else None
 
     def print_stats(self, stats, evaluation=False):
-
-        policy = "-"
-        qs = [0.0]
-        if self.policy_test:
-            policy, qs = self.network.q(self.ideal_states)
-            policy = "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy))
-
         actions = np.zeros(self.environment.get_num_actions())
         if evaluation:
             for action in self.agent.memory.actions[0:self.agent.memory.count]:
@@ -153,22 +141,21 @@ class Monitor:
               "lr: {:<11.7f} " \
               "eps: {:<9.5} " \
               "loss: {:<10.6f}  " \
-              "actions: {}, policy: {}".format(self.environment.get_episodes(),
+              "actions: {}".format(self.environment.get_episodes(),
                                   float(stats['max_q']) if stats['max_q'] is not None else 0.0,
                                   stats['min_score'],
                                   stats['max_score'],
                                   float(self.network.lr),
                                   float(self.agent.epsilon),
                                   float(self.network.batch_loss),
-                                  np.array_str(actions, precision=2),
-                                  policy)
+                                  np.array_str(actions, precision=2))
 
         self.console_stats = Stats()
 
         if evaluation:
             print(Fore.GREEN, log, Style.RESET_ALL)
         else:
-            print(" " + log, end="\n")
+            print(" " + log, end="")
 
 
     def monitor(self, state, reward, terminal, q_values, is_evaluate):
