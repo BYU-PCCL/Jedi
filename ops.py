@@ -97,8 +97,8 @@ def float16(source):
     return tf.cast(source, 'float16')
 
 
-def int(shape, name='int', bits=8):
-    return tf.placeholder('int' + str(bits), shape, name=name)
+def int(shape, name='int', bits=8, unsigned=False):
+    return tf.placeholder(('u' if unsigned else '') + 'int' + str(bits), shape, name=name)
 
 
 def environment_scale(states, environment):

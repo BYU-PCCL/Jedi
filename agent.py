@@ -29,7 +29,7 @@ class Agent(object):
         if random.random() <= (self.epsilon if not is_evaluate else self.args.exploration_epsilon_evaluation):
             return random.randint(0, self.num_actions - 1), None
         else:
-            action, qs, _ = self.network.q([self.phi])
+            action, qs, _ = self.network.q(states=[self.phi])
             return action[0], qs[0]
 
     def after_action(self, state, reward, action, terminal, is_evaluate):
@@ -50,7 +50,7 @@ class Agent(object):
         while True:
             self.ready_queue.get()  # Notify main thread a training has complete
             states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
-            tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
+            tderror, loss = self.network.train(states=states, actions=actions, terminals=terminals, next_states=next_states, rewards=rewards)
             self.memory.update(idx, priority=tderror)
 
 
@@ -61,18 +61,18 @@ class Test(Agent):
         self.policy_test = environment.generate_test()
         ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.policy_test
 
-        for _ in range(1000):
-            error, loss = self.network.train([ideal_states], [ideal_actions], [ideal_terminals], [ideal_next_states], [ideal_rewards], None)
+        for _ in range(5000):
+            error, loss = self.network.train(states=ideal_states, actions=ideal_actions, terminals=ideal_terminals, next_states=ideal_next_states, rewards=ideal_rewards)
 
-            policy, qs, _ = self.network.q([[[s] for _ in range(self.args.phi_frames)] for s in range(self.environment.size)])
-            _, goal_q, _ = self.network.q([[[self.environment.goal - 1] for _ in range(self.args.phi_frames)]])
+            policy, qs, _ = self.network.q(states=[[[s] for _ in range(self.args.phi_frames)] for s in range(self.environment.size)])
+            _, goal_q, _ = self.network.q(states=[[[self.environment.goal - 1] for _ in range(self.args.phi_frames)]])
             print self.network.training_iterations, \
-                  "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)), \
-                  np.max(goal_q), \
-                  loss
+                "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)), \
+                np.max(goal_q), \
+                loss
 
         for s in range(self.environment.size):
-            print s if s != self.environment.goal else '-', list(self.network.q([[[s] for _ in range(self.args.phi_frames)]])[1][0])
+            print s if s != self.environment.goal else '-', list(self.network.q(states=[[[s] for _ in range(self.args.phi_frames)]])[1][0])
 
 
 class Convergence(Agent):
@@ -86,7 +86,7 @@ class Convergence(Agent):
 
             for _ in range(10):
                 states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
-                tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
+                tderror, loss = self.network.train(states=states, actions=actions, terminals=terminals, next_states=next_states, rewards=rewards, lookaheads=lookaheads)
                 self.memory.update(idx, priority=tderror ** self.args.priority_temperature)
 
             self.network.update()
@@ -102,7 +102,7 @@ class QExplorer(Agent):
         if self.iterations < self.args.iterations_before_training:
             return random.randint(0, self.num_actions - 1), None
 
-        action, qs, _ = self.network.q([self.phi])
+        action, qs, _ = self.network.q(states=[self.phi])
         qprob = qs[0] - np.min(qs[0]) + 0.01
         qprob += np.mean(qprob) * self.epsilon  # ensures everyone has chance of being selected, but decays over time
         qprob = qprob / np.sum(qprob)
@@ -120,7 +120,7 @@ class DensityExplorer(Agent):
         if self.iterations < self.args.iterations_before_training:
             return random.randint(0, self.num_actions - 1), None
 
-        action, qs, additional_ops = self.network.q([self.phi])
+        action, qs, additional_ops = self.network.q(states=[self.phi])
         variances = additional_ops[0]
 
         if self.iterations % 1000 == 0:

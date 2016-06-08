@@ -148,7 +148,7 @@ class Monitor:
                                   float(stats['max_q']),
                                   stats['min_score'],
                                   stats['max_score'],
-                                  float(self.network.lr),
+                                  float(self.network.learning_rate),
                                   float(self.agent.epsilon),
                                   float(self.network.batch_loss),
                                   np.array_str(actions, precision=2))

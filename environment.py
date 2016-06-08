@@ -56,7 +56,7 @@ class ArrayEnvironment:
         return np.array(self.position)
 
     def max_state_value(self):
-        return self.size
+        return 1
 
     def get_terminal(self):
         return self.position[0] == self.goal or self.frames >= self.args.max_frames_per_episode

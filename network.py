@@ -11,11 +11,10 @@ class QLearner(object):
 
         self.training_iterations = 0
         self.batch_loss = 0
-        self.lr = 0
+        self.learning_rate = 0
         gradients = []
 
         self.sess = self.start_session(args)
-
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
         inputs = Type.Inputs(args, environment)
@@ -23,28 +22,29 @@ class QLearner(object):
         with tf.device('/gpu:0'):
             with tf.variable_scope('target_network'):
                 target_network = Type(args, environment, inputs)
-                target_output = target_network.build(inputs.next_states, self)
+                target_output = target_network.build(inputs.next_states)
 
             with tf.variable_scope('train_network'):
                 train_network = Type(args, environment, inputs)
-                train_output = train_network.build(inputs.states, self)
+                train_output = train_network.build(inputs.states)
 
             with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
                 self.actor_network = Type(args, environment, inputs)
-                self.actor_output = self.actor_network.build(inputs.states, self)
-                self.qs_argmax = op.argmax(self.actor_output)
+                self.actor_output = self.actor_network.build(inputs.states)
+                self.actor_output_argmax = op.argmax(self.actor_output)
 
         with tf.device('/gpu:1'):
             with tf.name_scope('loss'):
                 truth = train_network.truth(train_output, target_output)
                 prediction = tf.stop_gradient(train_network.prediction(train_output, target_output))
+
                 self.loss_op = train_network.loss(truth=truth, prediction=prediction)
                 self.priority_op = train_network.priority(truth=truth, prediction=prediction)
 
             # It's about 2x faster for us to compute the gradients than to use optimizer.minimize()
             with tf.name_scope('optimizer'):
-                self.learning_rate = train_network.learning_rate(step=self.global_step)
-                optimizer = train_network.optimizer(self.learning_rate)
+                self.learning_rate_op = train_network.learning_rate(step=self.global_step)
+                optimizer = train_network.optimizer(self.learning_rate_op)
                 gradient = optimizer.compute_gradients(self.loss_op)
                 gradients += [(grad, var) for grad, var in gradient if grad is not None]
                 self.train_op = optimizer.apply_gradients(gradients, global_step=self.global_step)
@@ -52,7 +52,10 @@ class QLearner(object):
             self.target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
             self.train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network')
             self.assign_ops = [target.assign(train) for target, train in zip(self.target_vars, self.train_vars)]
+
             self.inputs = inputs
+
+            self.test = self.loss_op
 
         self.sess.run(tf.initialize_all_variables())
         self.tensorboard()
@@ -73,38 +76,42 @@ class QLearner(object):
     def tensorboard(self):
         tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
         self.tensorboard_process = subprocess.Popen(["tensorboard", "--logdir=" + self.args.tf_summary_path],
-                         stdout=open(os.devnull, 'w'),
-                         stderr=open(os.devnull, 'w'),
-                         close_fds=True)
+                                                    stdout=open(os.devnull, 'w'),
+                                                    stderr=open(os.devnull, 'w'),
+                                                    close_fds=True)
+
 
     def update(self):
         self.sess.run(self.assign_ops)
 
-    def train(self, states, actions, terminals, next_states, rewards, lookahead=None):
+    def build_feed_dict(self, **kwargs):
+        # Print a notice to the user if they are passing in unknown variables
+        ignored = [key for key in kwargs.keys() if key + '_placeholder' not in self.inputs.__dict__.keys()]
+        assert len(ignored) == 0, 'Arguments passed to train() are ignored : ' + str(ignored)
+        return {getattr(self.inputs, key + '_placeholder'): var for (key, var) in kwargs.iteritems()}
 
-        data = {
-            self.inputs.states_placeholder: states,
-            self.inputs.actions_placeholder: actions,
-            self.inputs.terminals_placeholder: terminals,
-            self.inputs.rewards_placeholder: rewards,
-            self.inputs.next_states_placeholder: next_states
-        }
+    def train(self, **kwargs):
+        data = self.build_feed_dict(**kwargs)
 
-        _, priority, self.batch_loss, self.lr, self.training_iterations = self.sess.run([self.train_op,
-                                                                                      self.priority_op,
-                                                                                      self.loss_op,
-                                                                                      self.learning_rate,
-                                                                                      self.global_step],
-                                                                                      feed_dict=data)
+        _, priority, self.batch_loss, self.learning_rate, self.training_iterations, t = self.sess.run([self.train_op,
+                                                                                                    self.priority_op,
+                                                                                                    self.loss_op,
+                                                                                                    self.learning_rate_op,
+                                                                                                    self.global_step, self.test],
+                                                                                                   feed_dict=data)
+
+
+        print t
 
         if self.training_iterations % self.args.copy_frequency == 0:
             self.update()
 
         return priority, self.batch_loss
 
-    def q(self, states):
-        results = self.sess.run([self.qs_argmax, self.qs] + self.actor_network.additional_q_ops,
-                                feed_dict={self.inputs.states_placeholder: states})
+    def q(self, **kwargs):
+        data = self.build_feed_dict(**kwargs)
+        results = self.sess.run([self.actor_output_argmax, self.actor_output] + self.actor_network.additional_q_ops,
+                                feed_dict=data)
 
         return results[0], results[1], results[2:]
 
@@ -113,22 +120,29 @@ class Network(object):
 
     class Inputs:
         def __getattr__(self, item):
-            return {'actions': self.actions_placeholder,
-                    'rewards': op.optional_clip(self.rewards_placeholder, -1, 1, self.args.clip_reward),
-                    'states': op.environment_scale(self.states_placeholder, self.environment),
-                    'next_states': op.environment_scale(self.states_placeholder, self.environment),
-                    'terminals': self.terminals_placeholder}[item]
+            processed = {'actions': self.actions_placeholder,
+                         'rewards': op.optional_clip(self.rewards_placeholder, -1, 1, self.args.clip_reward),
+                         'states': op.environment_scale(self.states_placeholder, self.environment),
+                         'next_states': op.environment_scale(self.states_placeholder, self.environment),
+                         'terminals': self.terminals_placeholder}
+
+            processed.update(self.additional_inputs())
+
+            return processed[item]
 
         def __init__(self, args, environment):
             self.args = args
             self.environment = environment
 
-            with tf.name_scope('inputs') as _:
-                self.states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()), name='state')
-                self.next_states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()), name='state')
-                self.actions_placeholder = op.int([None], name='action_index')
+            with tf.name_scope('inputs'):
+                self.states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()), name='state', unsigned=True)
+                self.next_states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()), name='next_state', unsigned=True)
+                self.actions_placeholder = op.int([None], name='action_index', unsigned=True)
                 self.terminals_placeholder = op.int([None], name='terminal')
                 self.rewards_placeholder = op.int([None], name='reward', bits=32)
+
+        def additional_inputs(self):
+            return {}
 
     def __init__(self, args, environment, inputs):
         self.args = args
@@ -136,7 +150,7 @@ class Network(object):
         self.inputs = inputs
         self.additional_q_ops = []
 
-    def build(self, states, qlearner):
+    def build(self, states):
         pass
 
     def truth(self, train_output, target_output):
@@ -171,7 +185,7 @@ class Baseline(Network):
     def __init__(self, args, environment, inputs):
         Network.__init__(self, args, environment, inputs)
 
-    def build(self, states, qlearner):
+    def build(self, states):
         conv1, w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
         conv2, w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
         conv3, w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
@@ -185,7 +199,7 @@ class Linear(Network):
     def __init__(self, args, environment, inputs):
         Network.__init__(self, args, environment, inputs)
 
-    def build(self, states, qlearner):
+    def build(self, states):
         fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1"), 500, name='fc1')
         fc2,    w2, b2 = op.linear(fc1, 500, name='fc2')
         output, w2, b2 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='output')
@@ -194,41 +208,55 @@ class Linear(Network):
 
 
 class Constrained(Network):
+
+    class Inputs(Network.Inputs):
+        def __init__(self, args, environment):
+            Network.Inputs.__init__(self, args, environment)
+
+            with tf.name_scope('network_specific_inputs'):
+                self.lookaheads_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()),
+                                                    name='lookaheads')
+
+        def additional_inputs(self):
+            return {'lookaheads': op.environment_scale(self.states_placeholder, self.environment)}
+
     def __init__(self, args, environment, inputs):
         Network.__init__(self, args, environment, inputs)
 
-    def build(self, states, qlearner):
-        conv1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
-        conv2,     w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
-        conv3,     w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
-        fc4,       w4, b4 = op.linear(op.flatten(conv3), 256, name='fc4')
+    def build(self, states):
 
-        h,         w5, b5 = op.linear(fc4, 256, name='h')
-        h1,        w6, b6 = op.linear(h, 256, name='h1')
-        hhat,      w7, b7 = op.linear(h1, 256, name='hhat')
+        with tf.variable_scope('net'):
+            conv1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
+            conv2,     w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
+            conv3,     w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
+            fc4,       w4, b4 = op.linear(op.flatten(conv3), 256, name='fc4')
 
-        fc8,       w8, b8 = op.linear(op.merge(h, hhat, name="fc8"), 256, name='fc8')
-        output,    w9, b9 = op.linear(fc8, self.environment.get_num_actions(), activation_fn='none', name='output')
+            h,         w5, b5 = op.linear(fc4, 256, name='h')
+            h1,        w6, b6 = op.linear(h, 256, name='h1')
+            hhat,      w7, b7 = op.linear(h1, 256, name='hhat')
 
-        # hhat_conv1, _, _ = op.conv2d(lookahead, size=8, filters=32, stride=4, name='hhat_conv1', w=w1, b=b1)
-        # hhat_conv2, _, _ = op.conv2d(s.hhat_conv1, size=4, filters=64, stride=2, name='hhat_conv2', w=w2, b=b2)
-        # hhat_conv3, _, _ = op.conv2d(s.hhat_conv2, size=3, filters=64, stride=1, name='hhat_conv3', w=w3, b=b3)
-        # hhat_truth, _, _ = op.linear(s.flatten(self.hhat_conv3), 256, name='hhat_fc4', w=w4, b=b4)
-        #
-        # with tf.name_scope("constraint_error") as _:
-        #     self.constraint_error = tf.reduce_mean(tf.pow(tf.sub(self.hhat, self.hhat_truth), 2), reduction_indices=1)
+            fc8,       w8, b8 = op.linear(op.merge(h, hhat, name="fc8"), 256, name='fc8')
+            output,    w9, b9 = op.linear(fc8, self.environment.get_num_actions(), activation_fn='none', name='output')
+
+        with tf.name_scope('prediction'), tf.variable_scope('net', reuse=True):
+            hhat_conv1, _, _ = op.conv2d(self.inputs.lookaheads, size=8, filters=32, stride=4, name='conv1')
+            hhat_conv2, _, _ = op.conv2d(hhat_conv1, size=4, filters=64, stride=2, name='conv2')
+            hhat_conv3, _, _ = op.conv2d(hhat_conv2, size=3, filters=64, stride=1, name='conv3')
+            hhat_truth, _, _ = op.linear(op.flatten(hhat_conv3), 256, name='fc4')
+            self.constraint_error = tf.reduce_mean((hhat - hhat_truth)**2, reduction_indices=1, name='prediction_error')
 
         return output
 
-    def loss(self, processed_delta, truth, prediction, qlearner):
-        return tf.reduce_mean(tf.square(processed_delta)) + tf.reduce_mean(self.constraint_error)
+    def loss(self, truth, prediction):
+        delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
+        return tf.reduce_mean(tf.square(delta)) + tf.reduce_mean(op.float16(self.constraint_error))
 
 
 class Density(Network):
     def __init__(self, args, environment, inputs):
         Network.__init__(self, args, environment, inputs)
 
-    def build(self, states, qlearner):
+    def build(self, states):
         conv1,    w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
         conv2,    w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
         conv3,    w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
@@ -240,7 +268,7 @@ class Density(Network):
 
         return output
 
-    def loss(self, processed_delta, truth, prediction, qlearner):
+    def loss(self, truth, prediction):
 
         y = prediction
         mu = truth
@@ -267,7 +295,7 @@ class Causal(Network):
     def __init__(self, args, environment, inputs):
         Network.__init__(self, args, environment, inputs)
 
-    def build(self, states, qlearner):
+    def build(self, states):
 
         # Common Perception
         l1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
