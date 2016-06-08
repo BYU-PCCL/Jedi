@@ -1,7 +1,7 @@
 from __future__ import print_function
 from parameters import Parameters
 from agent import Agent
-from network import Commander
+from network import QLearner
 from environment import ArrayEnvironment, AtariEnvironment
 from monitor import Monitor
 from tqdm import tqdm
@@ -18,7 +18,7 @@ np.random.seed(args.random_seed)
 
 # Initialize
 environment = args.environment_class(args)
-network = args.commander_class(args.network_class, args, environment)
+network = QLearner(args.network_class, args, environment)
 agent = args.agent_class(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
 

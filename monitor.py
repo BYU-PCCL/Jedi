@@ -58,7 +58,7 @@ class Monitor:
             self.initialize_visualization()
 
         print("\n\nInitialized")
-        print("{0:>20} : {1:,} ".format("Network Parameters", len(self.network)))
+        print("{0:>20} : {1:,} ".format("Network Parameters", self.network.total_parameters()))
         print("{0:>20} : {1} ".format("Name", args.name))
         print("\n")
 

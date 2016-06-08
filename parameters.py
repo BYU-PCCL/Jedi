@@ -55,7 +55,6 @@ class Parameters():
 
         network_args = self.parser.add_argument_group('Network')
         network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained'])
-        network_args.add_argument('--commander_type', default='commander', type=str, choices=['commander', 'convergence'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.00025, type=float)
@@ -73,6 +72,7 @@ class Parameters():
         network_args.add_argument('--tf_summary_path', default="/tmp/network", type=str)
         network_args.add_argument('--tf_checkpoint_path', default="/tmp/checkpoints", type=str)
         network_args.add_argument('--convergence_repetitions', default=1000, type=int, help='in calls to train')
+
     def parse(self):
         args = self.parser.parse_args()
         ignored_args = ['verbose', 'sql_host', 'sql_db', 'sql_port', 'sql_user', 'sql_password',
@@ -89,12 +89,11 @@ class Parameters():
             args.iterations_before_training = 1000
 
         if args.convergence:
-            args.commander_type = 'convergence'
+            args.network_type = 'convergence'
             args.agent_type = 'convergence'
             args.iterations_before_training = 50000
             args.threads = 1
 
-        args.commander_class = self.parse_commander(args.commander_type)
         args.environment_class = self.parse_environment(args.environment_type)
         args.network_class = self.parse_network_type(args.network_type)
         args.agent_class = self.parse_agent_type(args.agent_type)
@@ -130,11 +129,8 @@ class Parameters():
                 'linear': network.Linear,
                 'density': network.Density,
                 'causal': network.Causal,
+                'convergence': network.Convergence,
                 'constrained': network.Constrained}[network_string]
-
-    def parse_commander(self, commander_string):
-        return {'commander': network.Commander,
-                'convergence': network.Convergence}[commander_string]
 
 
 #environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')

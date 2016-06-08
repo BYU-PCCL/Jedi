@@ -2,112 +2,12 @@ import tensorflow as tf
 import subprocess
 import os
 import numpy as np
-import shutil
+import ops as op
 
-
-class Network:
-    def __init__(self, args, environment):
+class QLearner(object):
+    def __init__(self, Type, args, environment):
         self.args = args
         self.environment = environment
-        self.default_initializer = args.initializer
-
-    def one_hot(self, source, size, name='onehot'):
-        return tf.one_hot(tf.cast(source, 'int64'), size, 1.0, 0.0, name=name)
-
-    def argmax(self, source, name='argmax'):
-        return tf.argmax(source, dimension=1)
-
-    def max(self, source, name='max'):
-        return tf.reduce_max(source, reduction_indices=1, name=name)
-
-    def flatten(self, source, name='flatten'):
-        shape = source.get_shape().as_list()
-        dim = reduce(lambda x, y: x * y, shape[1:])
-
-        with tf.variable_scope(name + "_flatten"):
-            return tf.reshape(source, [-1, dim], name=name)
-
-    def expand(self, source, dim, name='expand'):
-        with tf.variable_scope(name + "_expand"):
-            return tf.expand_dims(source, dim)
-
-    def merge(self, left, right, idx=1, name='merge'):
-        with tf.variable_scope(name + "_merge"):
-            return tf.concat(idx, [left, right])
-
-    def sum(self, source, name=None, idx=1):
-        return tf.reduce_sum(source, reduction_indices=idx, name=name)
-
-    def parse_initializer(self, initializer, stddev):
-        return {
-            'normal': tf.random_normal_initializer(stddev=stddev),
-            'xavier': tf.contrib.layers.xavier_initializer(),
-            'uniform': tf.random_uniform_initializer(),
-            'truncated-normal': tf.truncated_normal_initializer(0, stddev=stddev)
-        }[initializer if initializer != 'default' else self.default_initializer]
-
-    def parse_activation(self, activation):
-        return {
-            'relu': tf.nn.relu,
-            'sigmoid': tf.nn.sigmoid,
-            'none': None}[activation]
-
-    def linear(self, source, output_size, stddev=0.02, initializer='default', bias_start=0.01, activation_fn='relu',
-               name='linear'):
-        shape = source.get_shape().as_list()
-
-        initializer = self.parse_initializer(initializer, stddev)
-        activation_fn = self.parse_activation(activation_fn)
-
-        with tf.variable_scope(name + '_linear') as scope:
-            w = tf.get_variable("weight", [shape[1], output_size], tf.float32, initializer)
-            b = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(bias_start))
-
-            out = tf.nn.bias_add(tf.matmul(source, w), b)
-            activated = activation_fn(out) if activation_fn is not None else out
-
-            return activated, w, b
-
-    def conv2d(self, source, size, filters, stride, padding='SAME', stddev=0.02, initializer='default', bias_start=0.01,
-               activation_fn='relu', name='conv2d'):
-        shape = source.get_shape().as_list()
-        initializer = self.parse_initializer(initializer, stddev)
-        activation_fn = self.parse_activation(activation_fn)
-
-        with tf.variable_scope(name + '_conv2d') as scope:
-            w = tf.get_variable("weight", shape=[size, size, shape[1], filters], initializer=initializer)
-            b = tf.get_variable("bias", [filters], initializer=tf.constant_initializer(bias_start))
-
-            c = tf.nn.conv2d(source, w, strides=[1, 1, stride, stride], padding=padding, data_format='NCHW')
-            out = tf.nn.bias_add(c, b, data_format='NCHW')
-            activated = activation_fn(out) if activation_fn is not None else out
-
-            return activated, w, b
-
-    def float(self, shape, name='float'):
-        return tf.placeholder('float16', shape, name=name)
-
-    def to_float(self, source):
-        return tf.cast(source, 'float16')
-
-    def int(self, shape, name='int', bits=8):
-        return tf.placeholder('int' + str(bits), shape, name=name)
-
-    def loss(self, processed_delta, prediction, truth):
-        return tf.reduce_mean(tf.square(processed_delta, name='square'), name='loss')
-
-    def optimizer(self, learning_rate):
-        return tf.train.RMSPropOptimizer(learning_rate=learning_rate,
-                                         decay=self.args.rms_decay,
-                                         momentum=float(self.args.rms_momentum),
-                                         epsilon=self.args.rms_eps)
-
-    def environment_scale(self, states):
-        return tf.truediv(tf.to_float(states), tf.to_float(self.environment.max_state_value()))
-
-class Commander(Network):
-    def __init__(self, Type, args, environment):
-        Network.__init__(self, args, environment)
 
         self.training_iterations = 0
         self.batch_loss = 0
@@ -115,74 +15,49 @@ class Commander(Network):
         gradients = []
 
         self.sess = self.start_session(args)
-        network = Type(args, environment)
 
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
-        with tf.name_scope('learning_rate'), tf.device('/gpu:1'):
-            self.learning_rate = tf.maximum(self.args.learning_rate_end,
-                                               tf.train.exponential_decay(
-                                                 self.args.learning_rate_start,
-                                                 self.global_step,
-                                                 self.args.learning_rate_decay_step,
-                                                 self.args.learning_rate_decay,
-                                                 staircase=False))
-
-        with tf.device('/gpu:1'):
-            optimizer = network.optimizer(learning_rate=self.learning_rate)
-
-        with tf.name_scope('inputs') as _:
-            self.states = self.int([None, args.phi_frames] + list(environment.get_state_space()), name='state')
-            self.next_states = self.int([None, args.phi_frames] + list(environment.get_state_space()), name='next_state')
-            self.actions = self.int([None], name='action_index')
-            self.terminals = self.int([None], name='terminal')
-            self.rewards = self.int([None], name='reward', bits=32)
+        inputs = Type.Inputs(args, environment)
 
         with tf.device('/gpu:0'):
-            with tf.variable_scope('target_network'):  # Target network variables were created by thread_actor
-                next_qs = network.build(states=self.environment_scale(self.next_states))
-                next_best_qs = self.max(next_qs)
+            with tf.variable_scope('target_network'):
+                target_network = Type(args, environment, inputs)
+                target_output = target_network.build(inputs.next_states, self)
 
             with tf.variable_scope('train_network'):
-                train_qs = network.build(states=self.environment_scale(self.states))
-                train_acted_qs = self.sum(train_qs * self.one_hot(self.actions, environment.get_num_actions()))
-
-            with tf.device('/gpu:1'):
-                with tf.name_scope('target_q'):
-                    processed_rewards = tf.clip_by_value(self.rewards, -1, 1, name='clip_reward') if self.args.clip_reward else self.rewards
-                    target_q = tf.stop_gradient(self.to_float(processed_rewards) + self.to_float(self.args.discount) * (self.to_float(1.0) - self.to_float(self.terminals)) * self.to_float(next_best_qs))
-
-                with tf.name_scope('delta'):
-                    delta = self.to_float(target_q) - self.to_float(train_acted_qs)
-                    processed_delta = tf.clip_by_value(delta, -1.0, 1.0) if self.args.clip_tderror else delta
-
-                with tf.name_scope('loss'):
-                    self.loss_op = network.loss(processed_delta, prediction=train_acted_qs, truth=target_q)
-                    self.tderror = tf.pow(delta, self.args.priority_temperature)
-
-                gradient = optimizer.compute_gradients(self.loss_op)
-                # tf.truediv(grad, tf.to_float(self.args.towers))
-                gradients += [(grad, var) for grad, var in gradient if grad is not None]
+                train_network = Type(args, environment, inputs)
+                train_output = train_network.build(inputs.states, self)
 
             with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
-                self.qs = network.build(states=self.environment_scale(self.states))
-                self.qs_argmax = self.argmax(self.qs)
-
-        self.target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
-        self.train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network')
-
-        with tf.name_scope('copy'):
-            self.assign_ops = [target.assign(train) for target, train in zip(self.target_vars, self.train_vars)]
+                self.actor_network = Type(args, environment, inputs)
+                self.actor_output = self.actor_network.build(inputs.states, self)
+                self.qs_argmax = op.argmax(self.actor_output)
 
         with tf.device('/gpu:1'):
-            self.train_op = optimizer.apply_gradients(gradients, global_step=self.global_step)
+            with tf.name_scope('loss'):
+                truth = train_network.truth(train_output, target_output)
+                prediction = tf.stop_gradient(train_network.prediction(train_output, target_output))
+                self.loss_op = train_network.loss(truth=truth, prediction=prediction)
+                self.priority_op = train_network.priority(truth=truth, prediction=prediction)
 
-        init_op = tf.initialize_all_variables()
+            # It's about 2x faster for us to compute the gradients than to use optimizer.minimize()
+            with tf.name_scope('optimizer'):
+                self.learning_rate = train_network.learning_rate(step=self.global_step)
+                optimizer = train_network.optimizer(self.learning_rate)
+                gradient = optimizer.compute_gradients(self.loss_op)
+                gradients += [(grad, var) for grad, var in gradient if grad is not None]
+                self.train_op = optimizer.apply_gradients(gradients, global_step=self.global_step)
 
-        self.sess.run(init_op)
+            self.target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
+            self.train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network')
+            self.assign_ops = [target.assign(train) for target, train in zip(self.target_vars, self.train_vars)]
+            self.inputs = inputs
+
+        self.sess.run(tf.initialize_all_variables())
         self.tensorboard()
 
-    def __len__(self):
+    def total_parameters(self):
         return sum([sum([reduce(lambda x, y: x * y, l.get_shape().as_list()) for l in e]) for e in [self.train_vars]])
 
     def start_session(self, args):
@@ -208,15 +83,15 @@ class Commander(Network):
     def train(self, states, actions, terminals, next_states, rewards, lookahead=None):
 
         data = {
-            self.states: states,
-            self.actions: actions,
-            self.terminals: terminals,
-            self.rewards: rewards,
-            self.next_states: next_states
+            self.inputs.states_placeholder: states,
+            self.inputs.actions_placeholder: actions,
+            self.inputs.terminals_placeholder: terminals,
+            self.inputs.rewards_placeholder: rewards,
+            self.inputs.next_states_placeholder: next_states
         }
 
-        _, error, self.batch_loss, self.lr, self.training_iterations = self.sess.run([self.train_op,
-                                                                                      self.tderror,
+        _, priority, self.batch_loss, self.lr, self.training_iterations = self.sess.run([self.train_op,
+                                                                                      self.priority_op,
                                                                                       self.loss_op,
                                                                                       self.learning_rate,
                                                                                       self.global_step],
@@ -225,15 +100,201 @@ class Commander(Network):
         if self.training_iterations % self.args.copy_frequency == 0:
             self.update()
 
-        return error, self.batch_loss
+        return priority, self.batch_loss
 
     def q(self, states):
-        return self.sess.run([self.qs_argmax, self.qs], feed_dict={self.states: states})
+        results = self.sess.run([self.qs_argmax, self.qs] + self.actor_network.additional_q_ops,
+                                feed_dict={self.inputs.states_placeholder: states})
 
-class Convergence(Commander):
-    def __init__(self, Type, args, environment):
+        return results[0], results[1], results[2:]
+
+
+class Network(object):
+
+    class Inputs:
+        def __getattr__(self, item):
+            return {'actions': self.actions_placeholder,
+                    'rewards': op.optional_clip(self.rewards_placeholder, -1, 1, self.args.clip_reward),
+                    'states': op.environment_scale(self.states_placeholder, self.environment),
+                    'next_states': op.environment_scale(self.states_placeholder, self.environment),
+                    'terminals': self.terminals_placeholder}[item]
+
+        def __init__(self, args, environment):
+            self.args = args
+            self.environment = environment
+
+            with tf.name_scope('inputs') as _:
+                self.states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()), name='state')
+                self.next_states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()), name='state')
+                self.actions_placeholder = op.int([None], name='action_index')
+                self.terminals_placeholder = op.int([None], name='terminal')
+                self.rewards_placeholder = op.int([None], name='reward', bits=32)
+
+    def __init__(self, args, environment, inputs):
+        self.args = args
+        self.environment = environment
+        self.inputs = inputs
+        self.additional_q_ops = []
+
+    def build(self, states, qlearner):
+        pass
+
+    def truth(self, train_output, target_output):
+        return op.float16(self.inputs.rewards) + op.float16(self.args.discount) * (op.float16(1.0) - op.float16(self.inputs.terminals)) * op.float16(op.max(target_output))
+
+    def prediction(self, train_output, target_output):
+        return op.get(op.float16(train_output), self.inputs.actions, self.environment.get_num_actions())
+
+    def priority(self, truth, prediction):
+        return tf.pow(truth - prediction, self.args.priority_temperature)
+
+    def optimizer(self, learning_rate):
+        return tf.train.RMSPropOptimizer(learning_rate=learning_rate,
+                                         decay=self.args.rms_decay,
+                                         momentum=float(self.args.rms_momentum),
+                                         epsilon=self.args.rms_eps)
+
+    def learning_rate(self, step):
+        decayed_lr = tf.train.exponential_decay(self.args.learning_rate_start,
+                                                step,
+                                                self.args.learning_rate_decay_step,
+                                                self.args.learning_rate_decay,
+                                                staircase=False)
+        return tf.maximum(self.args.learning_rate_end, decayed_lr)
+
+    def loss(self, truth, prediction):
+        delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
+        return tf.reduce_mean(tf.square(delta, name='square'), name='loss')
+
+
+class Baseline(Network):
+    def __init__(self, args, environment, inputs):
+        Network.__init__(self, args, environment, inputs)
+
+    def build(self, states, qlearner):
+        conv1, w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
+        conv2, w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
+        conv3, w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
+        fc4, w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, name='fc4')
+        output, w5, b5 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
+
+        return output
+
+
+class Linear(Network):
+    def __init__(self, args, environment, inputs):
+        Network.__init__(self, args, environment, inputs)
+
+    def build(self, states, qlearner):
+        fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1"), 500, name='fc1')
+        fc2,    w2, b2 = op.linear(fc1, 500, name='fc2')
+        output, w2, b2 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='output')
+
+        return output
+
+
+class Constrained(Network):
+    def __init__(self, args, environment, inputs):
+        Network.__init__(self, args, environment, inputs)
+
+    def build(self, states, qlearner):
+        conv1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
+        conv2,     w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
+        conv3,     w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
+        fc4,       w4, b4 = op.linear(op.flatten(conv3), 256, name='fc4')
+
+        h,         w5, b5 = op.linear(fc4, 256, name='h')
+        h1,        w6, b6 = op.linear(h, 256, name='h1')
+        hhat,      w7, b7 = op.linear(h1, 256, name='hhat')
+
+        fc8,       w8, b8 = op.linear(op.merge(h, hhat, name="fc8"), 256, name='fc8')
+        output,    w9, b9 = op.linear(fc8, self.environment.get_num_actions(), activation_fn='none', name='output')
+
+        # hhat_conv1, _, _ = op.conv2d(lookahead, size=8, filters=32, stride=4, name='hhat_conv1', w=w1, b=b1)
+        # hhat_conv2, _, _ = op.conv2d(s.hhat_conv1, size=4, filters=64, stride=2, name='hhat_conv2', w=w2, b=b2)
+        # hhat_conv3, _, _ = op.conv2d(s.hhat_conv2, size=3, filters=64, stride=1, name='hhat_conv3', w=w3, b=b3)
+        # hhat_truth, _, _ = op.linear(s.flatten(self.hhat_conv3), 256, name='hhat_fc4', w=w4, b=b4)
+        #
+        # with tf.name_scope("constraint_error") as _:
+        #     self.constraint_error = tf.reduce_mean(tf.pow(tf.sub(self.hhat, self.hhat_truth), 2), reduction_indices=1)
+
+        return output
+
+    def loss(self, processed_delta, truth, prediction, qlearner):
+        return tf.reduce_mean(tf.square(processed_delta)) + tf.reduce_mean(self.constraint_error)
+
+
+class Density(Network):
+    def __init__(self, args, environment, inputs):
+        Network.__init__(self, args, environment, inputs)
+
+    def build(self, states, qlearner):
+        conv1,    w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
+        conv2,    w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
+        conv3,    w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
+        fc4,      w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, name='fc4')
+        output,   w5, b5 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
+        self.variance, w6, b6 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='sigmoid', name='variance')
+
+        self.additional_q_ops.append(self.variance)
+
+        return output
+
+    def loss(self, processed_delta, truth, prediction, qlearner):
+
+        y = prediction
+        mu = truth
+        sigma = self.sigma
+
+        out_sigma
+        out_mu, y
+
+        result = tf.sub(y, mu)
+        result = tf.mul(result, tf.inv(sigma))
+        result = -tf.square(result) / 2
+        result = tf.mul(tf.exp(result), tf.inv(sigma)) * (1 / np.sqrt(2*np.pi))
+        result = tf.reduce_sum(result, 1, keep_dims=True)
+        result = -tf.log(result)
+        return tf.reduce_mean(result)
+
+        sigmas = self.sum(self.float16(self.variance) * self.float16(qlearner.actions), name='variance_acted') + self.float16(1)
+        self.sigma = tf.reduce_mean(sigmas)
+
+        return tf.log(self.sigma) + tf.square(tf.reduce_mean(processed_delta)) / (2.0 * tf.square(self.sigma))
+
+
+class Causal(Network):
+    def __init__(self, args, environment, inputs):
+        Network.__init__(self, args, environment, inputs)
+
+    def build(self, states, qlearner):
+
+        # Common Perception
+        l1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
+
+        # A Side
+        l2a,    w2, b2 = op.conv2d(l1, size=4, filters=64, stride=2, name='a_conv2')
+        l2a_fc, w3, b3 = op.linear(op.flatten(l2a, name="a_fc4"), 32, activation_fn='none', name='a_fc3')
+
+        # B Side
+        l2b,    w4, b4 = op.conv2d(l1, size=4, filters=64, stride=2, name='b_conv2')
+        l2b_fc, w5, b5 = op.linear(op.flatten(l2b, name="b_fc4"), 32, activation_fn='none', name='b_fc3')
+
+        # Causal Matrix
+        l2a_fc_e = op.expand(l2a_fc, 2, name='a')  # now ?x32x1
+        l2b_fc_e = op.expand(l2b_fc, 1, name='b')  # now ?x1x32
+        causes = op.flatten(tf.batch_matmul(l2a_fc_e, l2b_fc_e, name='causes'))
+
+        l4,      w6, b6 = op.linear(causes, 512, name='l4')
+        output,  w5, b5 = op.linear(l4, self.environment.get_num_actions(), activation_fn='none', name='output')
+
+        return output
+
+
+class Convergence(Network):
+    def __init__(self, args, environment, inputs):
+        Network.__init__(self, args, environment, inputs)
         assert args.agent_type == 'convergence', 'Convergence Commander must use Convergence Agent'
-        Commander.__init__(self, Type, args, environment)
 
         # self.clear_ops = []
         # vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='train_network')
@@ -263,109 +324,3 @@ class Convergence(Commander):
                                                                               feed_dict=data)
 
         return error, self.batch_loss
-
-class Baseline(Network):
-    def __init__(self, args, environment):
-        Network.__init__(self, args, environment)
-
-    def build(self, states):
-        conv1, w1, b1 = self.conv2d(states, size=8, filters=32, stride=4, name='conv1')
-        conv2, w2, b2 = self.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
-        conv3, w3, b3 = self.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
-        fc4, w4, b4 = self.linear(self.flatten(conv3, name="fc4"), 512, name='fc4')
-        output, w5, b5 = self.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
-
-        return output
-
-
-class Linear(Network):
-    def __init__(self, args, environment):
-        Network.__init__(self, args, environment)
-
-    def build(self, states):
-        fc1,    w1, b1 = self.linear(self.flatten(states, name="fc1"), 500, name='fc1')
-        fc2,    w2, b2 = self.linear(fc1, 500, name='fc2')
-        output, w2, b2 = self.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='output')
-
-        return output
-
-
-class Constrained(Network):
-    def __init__(self, args, environment):
-        Network.__init__(self, args, environment)
-
-    def build(self, states):
-        conv1,     w1, b1 = self.conv2d(states, size=8, filters=32, stride=4, name='conv1')
-        conv2,     w2, b2 = self.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
-        conv3,     w3, b3 = self.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
-        fc4,       w4, b4 = self.linear(self.flatten(conv3), 256, name='fc4')
-
-        h,         w5, b5 = self.linear(fc4, 256, name='h')
-        h1,        w6, b6 = self.linear(h, 256, name='h1')
-        hhat,      w7, b7 = self.linear(h1, 256, name='hhat')
-
-        fc8,       w8, b8 = self.linear(self.merge(h, hhat, name="fc8"), 256, name='fc8')
-        output,    w9, b9 = self.linear(fc8, self.environment.get_num_actions(), activation_fn='none', name='output')
-
-        # hhat_conv1, _, _ = self.conv2d(lookahead, size=8, filters=32, stride=4, name='hhat_conv1', w=w1, b=b1)
-        # hhat_conv2, _, _ = self.conv2d(s.hhat_conv1, size=4, filters=64, stride=2, name='hhat_conv2', w=w2, b=b2)
-        # hhat_conv3, _, _ = self.conv2d(s.hhat_conv2, size=3, filters=64, stride=1, name='hhat_conv3', w=w3, b=b3)
-        # hhat_truth, _, _ = self.linear(s.flatten(self.hhat_conv3), 256, name='hhat_fc4', w=w4, b=b4)
-
-        # with tf.name_scope("constraint_error") as _:
-        #     self.constraint_error = tf.reduce_mean(tf.pow(tf.sub(self.hhat, self.hhat_truth), 2), reduction_indices=1)
-
-        return output
-
-    def loss(self, processed_delta, prediction, truth):
-        return tf.reduce_mean(tf.square(processed_delta)) #+ tf.reduce_mean(self.constraint_error)
-
-
-class Density(Network):
-    def __init__(self, args, environment):
-        Network.__init__(self, args, environment)
-
-    def build(self, states):
-
-        # Build Network
-        conv1,    w1, b1 = self.conv2d(states, size=8, filters=32, stride=4, name='conv1')
-        conv2,    w2, b2 = self.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
-        conv3,    w3, b3 = self.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
-        fc4,      w4, b4 = self.linear(self.flatten(conv3, name="fc4"), 512, name='fc4')
-        output,   w5, b5 = self.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
-        variance, w6, b6 = self.linear(fc4, self.environment.get_num_actions(), activation_fn='sigmoid', name='variance')
-
-        #self.additional_q_ops.append(self.variance)
-
-        return output
-
-    # def loss(self, processed_delta, prediction, truth):
-    #     sigma = self.sum(self.variance * self.action_one_hot, name='variance_acted') + 0.0001
-    #     return tf.reduce_mean(tf.log(sigma) + tf.square(processed_delta) / (2.0 * tf.square(sigma)))
-
-
-class Causal(Network):
-    def __init__(self, args, environment):
-        Network.__init__(self, args, environment)
-
-    def build(self, states):
-        # Common Perception
-        l1,     w1, b1 = self.conv2d(states, size=8, filters=32, stride=4, name='conv1')
-
-        # A Side
-        l2a,    w2, b2 = self.conv2d(l1, size=4, filters=64, stride=2, name='a_conv2')
-        l2a_fc, w3, b3 = self.linear(self.flatten(l2a, name="a_fc4"), 32, activation_fn='none', name='a_fc3')
-
-        # B Side
-        l2b,    w4, b4 = self.conv2d(l1, size=4, filters=64, stride=2, name='b_conv2')
-        l2b_fc, w5, b5 = self.linear(self.flatten(l2b, name="b_fc4"), 32, activation_fn='none', name='b_fc3')
-
-        # Causal Matrix
-        l2a_fc_e = self.expand(l2a_fc, 2, name='a')  # now ?x32x1
-        l2b_fc_e = self.expand(l2b_fc, 1, name='b')  # now ?x1x32
-        causes = self.flatten(tf.batch_matmul(l2a_fc_e, l2b_fc_e, name='causes'))
-
-        l4,      w6, b6 = self.linear(causes, 512, name='l4')
-        output,  w5, b5 = self.linear(l4, self.environment.get_num_actions(), activation_fn='none', name='output')
-
-        return output
