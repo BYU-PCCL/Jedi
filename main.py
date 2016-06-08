@@ -73,9 +73,8 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 
 # TODO
 # HIGH
-# convergance training
+# add lookahead graph
 # assert not nan in train assert not np.isnan(loss_value)
-# parameterize environment
 
 # MEDIUM
 # death ends episode

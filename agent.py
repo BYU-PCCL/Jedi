@@ -50,8 +50,8 @@ class Agent(object):
         while True:
             self.ready_queue.get()  # Notify main thread a training has complete
             states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
-            tderror, loss = self.network.train([states], [actions], [terminals], [next_states], [rewards], [lookaheads])
-            self.memory.update(idx, priority=tderror**self.args.priority_temperature)
+            tderror, loss = self.network.train(states, actions, terminals, next_states, rewards, lookaheads)
+            self.memory.update(idx, priority=tderror)
 
 
 class Test(Agent):

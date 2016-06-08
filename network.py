@@ -85,10 +85,10 @@ class Network:
             return activated, w, b
 
     def float(self, shape, name='float'):
-        return tf.placeholder('float32', shape, name=name)
+        return tf.placeholder('float16', shape, name=name)
 
     def to_float(self, source):
-        return tf.cast(source, 'float32')
+        return tf.cast(source, 'float16')
 
     def int(self, shape, name='int', bits=8):
         return tf.placeholder('int' + str(bits), shape, name=name)
@@ -118,13 +118,15 @@ class Commander(Network):
         network = Type(args, environment)
 
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
-        self.learning_rate = tf.maximum(self.args.learning_rate_end,
-                                           tf.train.exponential_decay(
-                                             self.args.learning_rate_start,
-                                             self.global_step,
-                                             self.args.learning_rate_decay_step,
-                                             self.args.learning_rate_decay,
-                                             staircase=False))
+
+        with tf.name_scope('learning_rate'), tf.device('/gpu:1'):
+            self.learning_rate = tf.maximum(self.args.learning_rate_end,
+                                               tf.train.exponential_decay(
+                                                 self.args.learning_rate_start,
+                                                 self.global_step,
+                                                 self.args.learning_rate_decay_step,
+                                                 self.args.learning_rate_decay,
+                                                 staircase=False))
 
         with tf.device('/gpu:1'):
             optimizer = network.optimizer(learning_rate=self.learning_rate)
@@ -148,24 +150,26 @@ class Commander(Network):
             with tf.device('/gpu:1'):
                 with tf.name_scope('target_q'):
                     processed_rewards = tf.clip_by_value(self.rewards, -1, 1, name='clip_reward') if self.args.clip_reward else self.rewards
-                    target_q = tf.stop_gradient(self.to_float(processed_rewards) + self.args.discount * (1.0 - self.to_float(self.terminals)) * next_best_qs)
+                    target_q = tf.stop_gradient(self.to_float(processed_rewards) + self.to_float(self.args.discount) * (self.to_float(1.0) - self.to_float(self.terminals)) * self.to_float(next_best_qs))
 
                 with tf.name_scope('delta'):
-                    delta = target_q - train_acted_qs
+                    delta = self.to_float(target_q) - self.to_float(train_acted_qs)
                     processed_delta = tf.clip_by_value(delta, -1.0, 1.0) if self.args.clip_tderror else delta
 
-                self.tderror = delta
-                self.loss_op = network.loss(processed_delta, prediction=train_acted_qs, truth=target_q)
+                with tf.name_scope('loss'):
+                    self.loss_op = network.loss(processed_delta, prediction=train_acted_qs, truth=target_q)
+                    self.tderror = tf.pow(delta, self.args.priority_temperature)
 
                 gradient = optimizer.compute_gradients(self.loss_op)
-                gradients += [(tf.truediv(grad, self.to_float(self.args.towers)), var) for grad, var in gradient if grad is not None]
+                # tf.truediv(grad, tf.to_float(self.args.towers))
+                gradients += [(grad, var) for grad, var in gradient if grad is not None]
 
-        with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
-            self.qs = network.build(states=self.environment_scale(self.states))
-            self.qs_argmax = self.argmax(self.qs)
+            with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
+                self.qs = network.build(states=self.environment_scale(self.states))
+                self.qs_argmax = self.argmax(self.qs)
 
-        self.target_vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='target_network')
-        self.train_vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='train_network')
+        self.target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
+        self.train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network')
 
         with tf.name_scope('copy'):
             self.assign_ops = [target.assign(train) for target, train in zip(self.target_vars, self.train_vars)]
