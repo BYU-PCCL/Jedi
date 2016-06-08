@@ -18,7 +18,7 @@ np.random.seed(args.random_seed)
 
 # Initialize
 environment = args.environment_class(args)
-network = Commander(args.network_class, args, environment)
+network = args.commander_class(args.network_class, args, environment)
 agent = args.agent_class(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
 
@@ -73,9 +73,8 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 
 # TODO
 # HIGH
-# convergance training
+# add lookahead graph
 # assert not nan in train assert not np.isnan(loss_value)
-# parameterize environment
 
 # MEDIUM
 # death ends episode

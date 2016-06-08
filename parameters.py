@@ -19,6 +19,7 @@ class Parameters():
         harness_args = self.parser.add_argument_group('Harness')
         harness_args.add_argument('--vis', action='store_const', const=True, default=False)
         harness_args.add_argument('--test', action='store_const', const=True, default=False)
+        harness_args.add_argument('--convergence', action='store_const', const=True, default=False)
         harness_args.add_argument('--name', default="learner")
         harness_args.add_argument('--verbose', action='store_const', const=True, default=False)
         harness_args.add_argument('--deterministic', action='store_const', const=True, default=False)
@@ -38,7 +39,7 @@ class Parameters():
         environment_args.add_argument('--buffer_size', default=2, type=int, help='number of frames to max')
 
         agent_args = self.parser.add_argument_group('Agent')
-        agent_args.add_argument('--agent_type', default='agent', type=str, choices=['agent', 'qexplorer', 'density', 'test'])
+        agent_args.add_argument('--agent_type', default='agent', type=str, choices=['agent', 'qexplorer', 'density', 'test', 'convergence'])
         agent_args.add_argument('--phi_frames', default=4, type=int)
         agent_args.add_argument('--replay_memory_size', default=1000000, type=int)
         agent_args.add_argument('--batch_size', default=32, type=int)
@@ -47,13 +48,14 @@ class Parameters():
         agent_args.add_argument('--exploration_epsilon_decay', default=1000000, type=int, help='in calls to train')
         agent_args.add_argument('--exploration_epsilon_evaluation', default=.05, type=int, help='epsilon for evaluation')
         agent_args.add_argument('--train_frequency', default=3, type=int, help='in ticks')
-        agent_args.add_argument('--threads', default=10, type=int)
+        agent_args.add_argument('--threads', default=12, type=int)
         agent_args.add_argument('--lookahead', default=10, type=int, help='in frames')
         agent_args.add_argument('--use_prioritization', action='store_const', const=True, default=False)
         agent_args.add_argument('--priority_temperature', default=4.0, type=float, help='n where tderror^n')
 
         network_args = self.parser.add_argument_group('Network')
         network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained'])
+        network_args.add_argument('--commander_type', default='commander', type=str, choices=['commander', 'convergence'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.00025, type=float)
@@ -68,10 +70,9 @@ class Parameters():
         network_args.add_argument('--copy_frequency', default=2500, type=int, help='in calls to train')
         network_args.add_argument('--clip_reward', default=1, type=int)
         network_args.add_argument('--clip_tderror', default=1, type=int)
-        network_args.add_argument('--towers', default=1, type=int)
         network_args.add_argument('--tf_summary_path', default="/tmp/network", type=str)
         network_args.add_argument('--tf_checkpoint_path', default="/tmp/checkpoints", type=str)
-
+        network_args.add_argument('--convergence_repetitions', default=1000, type=int, help='in calls to train')
     def parse(self):
         args = self.parser.parse_args()
         ignored_args = ['verbose', 'sql_host', 'sql_db', 'sql_port', 'sql_user', 'sql_password',
@@ -87,6 +88,13 @@ class Parameters():
             args.bypass_sql = True
             args.iterations_before_training = 1000
 
+        if args.convergence:
+            args.commander_type = 'convergence'
+            args.agent_type = 'convergence'
+            args.iterations_before_training = 50000
+            args.threads = 1
+
+        args.commander_class = self.parse_commander(args.commander_type)
         args.environment_class = self.parse_environment(args.environment_type)
         args.network_class = self.parse_network_type(args.network_type)
         args.agent_class = self.parse_agent_type(args.agent_type)
@@ -114,7 +122,8 @@ class Parameters():
         return {'agent': agent.Agent,
                 'qexplorer': agent.QExplorer,
                 'test': agent.Test,
-                'density': agent.DensityExplorer}[agent_string]
+                'density': agent.DensityExplorer,
+                'convergence': agent.Convergence}[agent_string]
 
     def parse_network_type(self, network_string):
         return {'baseline': network.Baseline,
@@ -122,6 +131,10 @@ class Parameters():
                 'density': network.Density,
                 'causal': network.Causal,
                 'constrained': network.Constrained}[network_string]
+
+    def parse_commander(self, commander_string):
+        return {'commander': network.Commander,
+                'convergence': network.Convergence}[commander_string]
 
 
 #environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')
