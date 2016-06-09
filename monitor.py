@@ -179,6 +179,9 @@ class Monitor:
                     stats.update('score', self.environment.get_score())
 
         if is_evaluate:
+
+            print(action, q_values)
+
             if self.eval_stats is None:
                 self.eval_stats = Stats()
 
