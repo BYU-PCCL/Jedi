@@ -35,9 +35,8 @@ class QLearner(object):
 
         with tf.device('/gpu:1'):
             with tf.name_scope('loss'):
-                truth = train_network.truth(train_output, target_output)
-                prediction = tf.stop_gradient(train_network.prediction(train_output, target_output))
-
+                truth = tf.stop_gradient(train_network.truth(train_output=train_output, target_output=target_output))
+                prediction = train_network.prediction(train_output=train_output, target_output=target_output)
                 self.loss_op = train_network.loss(truth=truth, prediction=prediction)
                 self.priority_op = train_network.priority(truth=truth, prediction=prediction)
 
@@ -47,6 +46,7 @@ class QLearner(object):
                 optimizer = train_network.optimizer(self.learning_rate_op)
                 gradient = optimizer.compute_gradients(self.loss_op)
                 gradients += [(grad, var) for grad, var in gradient if grad is not None]
+
                 self.train_op = optimizer.apply_gradients(gradients, global_step=self.global_step)
 
             self.target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
@@ -54,8 +54,6 @@ class QLearner(object):
             self.assign_ops = [target.assign(train) for target, train in zip(self.target_vars, self.train_vars)]
 
             self.inputs = inputs
-
-            self.test = self.loss_op
 
         self.sess.run(tf.initialize_all_variables())
         self.tensorboard()
@@ -87,21 +85,19 @@ class QLearner(object):
     def build_feed_dict(self, **kwargs):
         # Print a notice to the user if they are passing in unknown variables
         ignored = [key for key in kwargs.keys() if key + '_placeholder' not in self.inputs.__dict__.keys()]
-        assert len(ignored) == 0, 'Arguments passed to train() are ignored : ' + str(ignored)
+        assert len(ignored) == 0, 'The following arguments passed to train() are not used by this network : ' + str(ignored)
         return {getattr(self.inputs, key + '_placeholder'): var for (key, var) in kwargs.iteritems()}
 
     def train(self, **kwargs):
         data = self.build_feed_dict(**kwargs)
 
-        _, priority, self.batch_loss, self.learning_rate, self.training_iterations, t = self.sess.run([self.train_op,
+        _, priority, self.batch_loss, self.learning_rate, self.training_iterations = self.sess.run([self.train_op,
                                                                                                     self.priority_op,
                                                                                                     self.loss_op,
                                                                                                     self.learning_rate_op,
-                                                                                                    self.global_step, self.test],
+                                                                                                    self.global_step],
                                                                                                    feed_dict=data)
 
-
-        print t
 
         if self.training_iterations % self.args.copy_frequency == 0:
             self.update()
@@ -154,7 +150,7 @@ class Network(object):
         pass
 
     def truth(self, train_output, target_output):
-        return op.float16(self.inputs.rewards) + op.float16(self.args.discount) * (op.float16(1.0) - op.float16(self.inputs.terminals)) * op.float16(op.max(target_output))
+        return op.float16(self.inputs.rewards) + self.args.discount * (1.0 - op.float16(self.inputs.terminals)) * op.float16(op.max(target_output))
 
     def prediction(self, train_output, target_output):
         return op.get(op.float16(train_output), self.inputs.actions, self.environment.get_num_actions())
@@ -177,7 +173,8 @@ class Network(object):
         return tf.maximum(self.args.learning_rate_end, decayed_lr)
 
     def loss(self, truth, prediction):
-        delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
+        delta = op.optional_clip(op.float16(truth) - op.float16(prediction), -1.0, 1.0, self.args.clip_tderror)
+
         return tf.reduce_mean(tf.square(delta, name='square'), name='loss')
 
 
@@ -200,9 +197,9 @@ class Linear(Network):
         Network.__init__(self, args, environment, inputs)
 
     def build(self, states):
-        fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1"), 500, name='fc1')
+        fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1_flatten"), 500, name='fc1')
         fc2,    w2, b2 = op.linear(fc1, 500, name='fc2')
-        output, w2, b2 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='output')
+        output, w3, b3 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='output')
 
         return output
 
@@ -344,11 +341,13 @@ class Convergence(Network):
             self.next_states: next_states
         }
 
-        _, error, self.batch_loss, self.lr, self.training_iterations = self.sess.run([self.train_op,
+        _, error, self.batch_loss, self.lr, self.training_iterations, t1, t2, t3 = self.sess.run([self.train_op,
                                                                                self.tderror,
                                                                                self.loss_op,
                                                                                self.learning_rate,
-                                                                               self.global_step],
+                                                                               self.global_step, self.test1, self.test2, self.test3],
                                                                               feed_dict=data)
+
+        print t1[5], t2[5], t3[5], kargs['states'][5], kargs['actions'][5]
 
         return error, self.batch_loss
