@@ -1,8 +1,5 @@
 from __future__ import print_function
 from parameters import Parameters
-from agent import Agent
-from network import QLearner
-from environment import ArrayEnvironment, AtariEnvironment
 from monitor import Monitor
 from tqdm import tqdm
 import numpy as np
@@ -18,7 +15,7 @@ np.random.seed(args.random_seed)
 
 # Initialize
 environment = args.environment_class(args)
-network = QLearner(args.network_class, args, environment)
+network = args.dqn_class(args.network_class, args, environment)
 agent = args.agent_class(args, environment, network)
 monitor = Monitor(args, environment, network, agent)
 
@@ -73,15 +70,24 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 
 # TODO
 # HIGH
-# add lookahead graph
-# assert not nan in train assert not np.isnan(loss_value)
+# watch q values over course of game in graph
+# add timeout to threads
+# dynamic multi-gpu allocation
+
 
 # MEDIUM
 # death ends episode
 # negative reward on death
 # add constrained priorities
+# add with op.defaults({'activation_fn': 'relu'}): to ops.py
+# rename states_placeholder to state_placeholder and remove all plural inputs
+# dynamically build list of networks for parameters.py
+# add --network_name-parameter dynamic parameters for each network and agent
+# add auto-complete to params
+
 
 # LOW
+# ssert not nan in train assert not np.isnan(loss_value)
 # dynamic layer labeling
 # dynamic train  ops in network
 # add checkpoints

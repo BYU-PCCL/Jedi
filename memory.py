@@ -60,7 +60,7 @@ class Memory:
         return self.count > self.args.batch_size
 
     def sample_priority_indexes(self, size):
-        cumsum = np.cumsum(self.priorities)
+        cumsum = np.cumsum(self.priorities[0:self.count])
         proposal = np.random.random(size) * cumsum[-1]
         # Faster than np.random.choice
         return list(np.searchsorted(cumsum, proposal, side='left'))

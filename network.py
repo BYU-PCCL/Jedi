@@ -4,10 +4,11 @@ import os
 import numpy as np
 import ops as op
 
-class QLearner(object):
+class DQN(object):
     def __init__(self, Type, args, environment):
         self.args = args
         self.environment = environment
+        self.tensorboard_process = None
 
         self.training_iterations = 0
         self.batch_loss = 0
@@ -25,8 +26,8 @@ class QLearner(object):
                 target_output = target_network.build(inputs.next_states)
 
             with tf.variable_scope('train_network'):
-                train_network = Type(args, environment, inputs)
-                train_output = train_network.build(inputs.states)
+                self.train_network = Type(args, environment, inputs)
+                train_output = self.train_network.build(inputs.states)
 
             with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
                 self.actor_network = Type(args, environment, inputs)
@@ -35,15 +36,16 @@ class QLearner(object):
 
         with tf.device('/gpu:1'):
             with tf.name_scope('loss'):
-                truth = tf.stop_gradient(train_network.truth(train_output=train_output, target_output=target_output))
-                prediction = train_network.prediction(train_output=train_output, target_output=target_output)
-                self.loss_op = train_network.loss(truth=truth, prediction=prediction)
-                self.priority_op = train_network.priority(truth=truth, prediction=prediction)
+                truth = tf.stop_gradient(target_network.truth(train_output=train_output, target_output=target_output))
+                prediction = self.train_network.prediction(train_output=train_output, target_output=target_output)
+
+                self.loss_op = self.train_network.loss(truth=truth, prediction=prediction)
+                self.priority_op = self.train_network.priority(truth=truth, prediction=prediction)
 
             # It's about 2x faster for us to compute the gradients than to use optimizer.minimize()
             with tf.name_scope('optimizer'):
-                self.learning_rate_op = train_network.learning_rate(step=self.global_step)
-                optimizer = train_network.optimizer(self.learning_rate_op)
+                self.learning_rate_op = self.train_network.learning_rate(step=self.global_step)
+                optimizer = self.train_network.optimizer(self.learning_rate_op)
                 gradient = optimizer.compute_gradients(self.loss_op)
                 gradients += [(grad, var) for grad, var in gradient if grad is not None]
 
@@ -72,15 +74,17 @@ class QLearner(object):
 
 
     def tensorboard(self):
+        if self.tensorboard_process is not None:
+            self.tensorboard_process.kill()
         tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
         self.tensorboard_process = subprocess.Popen(["tensorboard", "--logdir=" + self.args.tf_summary_path],
                                                     stdout=open(os.devnull, 'w'),
                                                     stderr=open(os.devnull, 'w'),
                                                     close_fds=True)
 
-
     def update(self):
-        self.sess.run(self.assign_ops)
+        if self.training_iterations % self.args.copy_frequency == 0:
+            self.sess.run(self.assign_ops)
 
     def build_feed_dict(self, **kwargs):
         # Print a notice to the user if they are passing in unknown variables
@@ -91,6 +95,7 @@ class QLearner(object):
     def train(self, **kwargs):
         data = self.build_feed_dict(**kwargs)
 
+        self.train_network.debug(self.sess, data)
         _, priority, self.batch_loss, self.learning_rate, self.training_iterations = self.sess.run([self.train_op,
                                                                                                     self.priority_op,
                                                                                                     self.loss_op,
@@ -98,9 +103,7 @@ class QLearner(object):
                                                                                                     self.global_step],
                                                                                                    feed_dict=data)
 
-
-        if self.training_iterations % self.args.copy_frequency == 0:
-            self.update()
+        self.update()
 
         return priority, self.batch_loss
 
@@ -119,7 +122,7 @@ class Network(object):
             processed = {'actions': self.actions_placeholder,
                          'rewards': op.optional_clip(self.rewards_placeholder, -1, 1, self.args.clip_reward),
                          'states': op.environment_scale(self.states_placeholder, self.environment),
-                         'next_states': op.environment_scale(self.states_placeholder, self.environment),
+                         'next_states': op.environment_scale(self.next_states_placeholder, self.environment),
                          'terminals': self.terminals_placeholder}
 
             processed.update(self.additional_inputs())
@@ -173,9 +176,11 @@ class Network(object):
         return tf.maximum(self.args.learning_rate_end, decayed_lr)
 
     def loss(self, truth, prediction):
-        delta = op.optional_clip(op.float16(truth) - op.float16(prediction), -1.0, 1.0, self.args.clip_tderror)
-
+        delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
         return tf.reduce_mean(tf.square(delta, name='square'), name='loss')
+
+    def debug(self, session, data):
+        pass
 
 
 class Baseline(Network):
@@ -183,10 +188,10 @@ class Baseline(Network):
         Network.__init__(self, args, environment, inputs)
 
     def build(self, states):
-        conv1, w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
-        conv2, w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
-        conv3, w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
-        fc4, w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, name='fc4')
+        conv1, w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
+        conv2, w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, activation_fn='relu', name='conv2')
+        conv3, w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
+        fc4, w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, activation_fn='relu', name='fc4')
         output, w5, b5 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
 
         return output
@@ -197,8 +202,8 @@ class Linear(Network):
         Network.__init__(self, args, environment, inputs)
 
     def build(self, states):
-        fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1_flatten"), 500, name='fc1')
-        fc2,    w2, b2 = op.linear(fc1, 500, name='fc2')
+        fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1_flatten"), 500, activation_fn='relu', name='fc1')
+        fc2,    w2, b2 = op.linear(fc1, 500, name='fc2', activation_fn='relu')
         output, w3, b3 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='output')
 
         return output
@@ -223,23 +228,23 @@ class Constrained(Network):
     def build(self, states):
 
         with tf.variable_scope('net'):
-            conv1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
-            conv2,     w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
-            conv3,     w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
-            fc4,       w4, b4 = op.linear(op.flatten(conv3), 256, name='fc4')
+            conv1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
+            conv2,     w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, activation_fn='relu', name='conv2')
+            conv3,     w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
+            fc4,       w4, b4 = op.linear(op.flatten(conv3), 256, activation_fn='relu', name='fc4')
 
-            h,         w5, b5 = op.linear(fc4, 256, name='h')
-            h1,        w6, b6 = op.linear(h, 256, name='h1')
-            hhat,      w7, b7 = op.linear(h1, 256, name='hhat')
+            h,         w5, b5 = op.linear(fc4, 256, activation_fn='relu', name='h')
+            h1,        w6, b6 = op.linear(h, 256, activation_fn='relu', name='h1')
+            hhat,      w7, b7 = op.linear(h1, 256, activation_fn='relu', name='hhat')
 
-            fc8,       w8, b8 = op.linear(op.merge(h, hhat, name="fc8"), 256, name='fc8')
+            fc8,       w8, b8 = op.linear(op.merge(h, hhat, name="fc8"), 256, activation_fn='relu', name='fc8')
             output,    w9, b9 = op.linear(fc8, self.environment.get_num_actions(), activation_fn='none', name='output')
 
         with tf.name_scope('prediction'), tf.variable_scope('net', reuse=True):
-            hhat_conv1, _, _ = op.conv2d(self.inputs.lookaheads, size=8, filters=32, stride=4, name='conv1')
-            hhat_conv2, _, _ = op.conv2d(hhat_conv1, size=4, filters=64, stride=2, name='conv2')
-            hhat_conv3, _, _ = op.conv2d(hhat_conv2, size=3, filters=64, stride=1, name='conv3')
-            hhat_truth, _, _ = op.linear(op.flatten(hhat_conv3), 256, name='fc4')
+            hhat_conv1, _, _ = op.conv2d(self.inputs.lookaheads, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
+            hhat_conv2, _, _ = op.conv2d(hhat_conv1, size=4, filters=64, stride=2, activation_fn='relu', name='conv2')
+            hhat_conv3, _, _ = op.conv2d(hhat_conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
+            hhat_truth, _, _ = op.linear(op.flatten(hhat_conv3), 256, activation_fn='relu', name='fc4')
             self.constraint_error = tf.reduce_mean((hhat - hhat_truth)**2, reduction_indices=1, name='prediction_error')
 
         return output
@@ -254,38 +259,54 @@ class Density(Network):
         Network.__init__(self, args, environment, inputs)
 
     def build(self, states):
-        conv1,    w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
-        conv2,    w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
-        conv3,    w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
-        fc4,      w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, name='fc4')
+        conv1,    w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
+        conv2,    w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, activation_fn='relu', name='conv2')
+        conv3,    w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
+        fc4,      w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, activation_fn='relu', name='fc4')
         output,   w5, b5 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
-        self.variance, w6, b6 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='sigmoid', name='variance')
+        self.sigma, w6, b6 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='relu', name='variance')
 
+        self.sigma += 0.0001
+        self.variance = tf.exp(self.sigma)
         self.additional_q_ops.append(self.variance)
 
         return output
 
     def loss(self, truth, prediction):
-
         y = prediction
         mu = truth
-        sigma = self.sigma
+        sigma = op.get(self.sigma, self.inputs.actions, self.environment.get_num_actions())
+        a = 0
 
-        out_sigma
-        out_mu, y
+        result = y - mu
 
-        result = tf.sub(y, mu)
-        result = tf.mul(result, tf.inv(sigma))
+        self.a = result
+
+        result = tf.cast(result, 'float32') * tf.inv(sigma)
+
+
+        self.b = tf.inv(sigma)
+        self.c = result
+
         result = -tf.square(result) / 2
-        result = tf.mul(tf.exp(result), tf.inv(sigma)) * (1 / np.sqrt(2*np.pi))
-        result = tf.reduce_sum(result, 1, keep_dims=True)
-        result = -tf.log(result)
-        return tf.reduce_mean(result)
 
-        sigmas = self.sum(self.float16(self.variance) * self.float16(qlearner.actions), name='variance_acted') + self.float16(1)
-        self.sigma = tf.reduce_mean(sigmas)
+        self.d = result
+        result = tf.exp(result) * tf.inv(sigma) * (1 / np.sqrt(2*np.pi))
 
-        return tf.log(self.sigma) + tf.square(tf.reduce_mean(processed_delta)) / (2.0 * tf.square(self.sigma))
+        self.e = result
+        result = -(a + tf.log(result))
+
+        self.lossv = tf.reduce_mean(result)
+
+        return self.lossv
+
+    def debug(self, session, data):
+        lossv, a, b, c, d, e, sigma, variance = session.run([self.lossv, self.a, self.b, self.c, self.d, self.e, self.sigma, self.variance], feed_dict=data)
+
+        print "###############   lossv: {} \t a: {}, {} \t b: {}, {} \t sigma: {}, {}".format(lossv, np.max(a), np.min(a), np.max(b), np.min(b), np.min(sigma), np.max(sigma))
+
+        if np.isnan(sigma).any() or np.isnan(variance).any():
+            quit()
 
 
 class Causal(Network):
@@ -295,14 +316,14 @@ class Causal(Network):
     def build(self, states):
 
         # Common Perception
-        l1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
+        l1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
 
         # A Side
-        l2a,    w2, b2 = op.conv2d(l1, size=4, filters=64, stride=2, name='a_conv2')
+        l2a,    w2, b2 = op.conv2d(l1, size=4, filters=64, stride=2, activation_fn='relu', name='a_conv2')
         l2a_fc, w3, b3 = op.linear(op.flatten(l2a, name="a_fc4"), 32, activation_fn='none', name='a_fc3')
 
         # B Side
-        l2b,    w4, b4 = op.conv2d(l1, size=4, filters=64, stride=2, name='b_conv2')
+        l2b,    w4, b4 = op.conv2d(l1, size=4, filters=64, stride=2, activation_fn='relu', name='b_conv2')
         l2b_fc, w5, b5 = op.linear(op.flatten(l2b, name="b_fc4"), 32, activation_fn='none', name='b_fc3')
 
         # Causal Matrix
@@ -310,44 +331,36 @@ class Causal(Network):
         l2b_fc_e = op.expand(l2b_fc, 1, name='b')  # now ?x1x32
         causes = op.flatten(tf.batch_matmul(l2a_fc_e, l2b_fc_e, name='causes'))
 
-        l4,      w6, b6 = op.linear(causes, 512, name='l4')
+        l4,      w6, b6 = op.linear(causes, 512, activation_fn='relu', name='l4')
         output,  w5, b5 = op.linear(l4, self.environment.get_num_actions(), activation_fn='none', name='output')
 
         return output
 
 
-class Convergence(Network):
-    def __init__(self, args, environment, inputs):
-        Network.__init__(self, args, environment, inputs)
-        assert args.agent_type == 'convergence', 'Convergence Commander must use Convergence Agent'
+class ConvergenceDQN(DQN):
+    def __init__(self, Type, args, environment):
+        DQN.__init__(self, Type, args, environment)
 
-        # self.clear_ops = []
-        # vars = tf.get_collection(tf.GraphKeys.VARIABLES, scope='train_network')
+        self.reset_ops = []
 
-        # for var in vars:
-            # newvar = (1 - mask) * variables + mask * random
-            # self.clear_ops.append(var.assign(newvar))
+        with tf.name_scope('random_reset'):
+            for var in self.train_vars:
+                 with tf.device(var.device):
+                    mask = tf.reshape(
+                            # sample 1s and 0s (1-d array) to reshape (1's represent reset)
+                            tf.multinomial(tf.log([[1.0-args.convergence_percent_reset, args.convergence_percent_reset]]),
+                                           np.prod(var.get_shape())),
+                            var.get_shape())
+                    rands = var.initial_value.op.outputs[0]  # op to get new random values from initializer
 
-    def clear(self):
-        self.sess.run(self.clear_ops)
+                    mask = tf.cast(mask, var.dtype.base_dtype)
+                    new_value = mask * rands + (1-mask) * var
 
-    def train(self, states, actions, terminals, next_states, rewards, lookahead=None):
+                    self.reset_ops.append(var.assign(new_value))
 
-        data = {
-            self.states: states,
-            self.actions: actions,
-            self.terminals: terminals,
-            self.rewards: rewards,
-            self.next_states: next_states
-        }
+        self.tensorboard()
 
-        _, error, self.batch_loss, self.lr, self.training_iterations, t1, t2, t3 = self.sess.run([self.train_op,
-                                                                               self.tderror,
-                                                                               self.loss_op,
-                                                                               self.learning_rate,
-                                                                               self.global_step, self.test1, self.test2, self.test3],
-                                                                              feed_dict=data)
-
-        print t1[5], t2[5], t3[5], kargs['states'][5], kargs['actions'][5]
-
-        return error, self.batch_loss
+    def update(self):
+        if self.training_iterations % (self.args.copy_frequency * self.args.convergence_repetitions) == 0:
+            self.sess.run(self.assign_ops)  # Update target network
+            self.sess.run(self.reset_ops)   # then reset the train network weights

@@ -54,6 +54,7 @@ class Parameters():
         agent_args.add_argument('--priority_temperature', default=4.0, type=float, help='n where tderror^n')
 
         network_args = self.parser.add_argument_group('Network')
+        network_args.add_argument('--dqn_type', default='dqn', type=str, choices=['dqn', 'convergencedqn'])
         network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
@@ -71,7 +72,8 @@ class Parameters():
         network_args.add_argument('--clip_tderror', default=1, type=int)
         network_args.add_argument('--tf_summary_path', default="/tmp/network", type=str)
         network_args.add_argument('--tf_checkpoint_path', default="/tmp/checkpoints", type=str)
-        network_args.add_argument('--convergence_repetitions', default=1000, type=int, help='in calls to train')
+        network_args.add_argument('--convergence-repetitions', default=500, type=int, help='in calls to train')
+        network_args.add_argument('--convergence-percent_reset', default=0.1, type=float, help='[0-1]')
 
     def parse(self):
         args = self.parser.parse_args()
@@ -86,15 +88,15 @@ class Parameters():
             args.network_type = 'linear'
             args.agent_type = 'test'
             args.bypass_sql = True
-            args.copy_frequency = 100000
+            args.copy_frequency = 10
             args.iterations_before_training = 1000
 
         if args.convergence:
-            args.network_type = 'convergence'
+            args.dqn_type = 'convergencedqn'
             args.agent_type = 'convergence'
-            args.iterations_before_training = 50000
-            args.threads = 1
+            args.evaluate_frequency /= args.convergence_repetitions
 
+        args.dqn_class = self.parse_dqn(args.dqn_type)
         args.environment_class = self.parse_environment(args.environment_type)
         args.network_class = self.parse_network_type(args.network_type)
         args.agent_class = self.parse_agent_type(args.agent_type)
@@ -114,6 +116,10 @@ class Parameters():
 
         return args
 
+    def parse_dqn(self, env_string):
+        return {'dqn': network.DQN,
+                'convergencedqn': network.ConvergenceDQN}[env_string]
+
     def parse_environment(self, env_string):
         return {'atari': environment.AtariEnvironment,
                 'array': environment.ArrayEnvironment}[env_string]
@@ -130,7 +136,6 @@ class Parameters():
                 'linear': network.Linear,
                 'density': network.Density,
                 'causal': network.Causal,
-                'convergence': network.Convergence,
                 'constrained': network.Constrained}[network_string]
 
 

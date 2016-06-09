@@ -43,8 +43,11 @@ class Agent(object):
                 for thread in self.threads:
                     thread.start()
 
-            self.ready_queue.put(True)  # Wait for training to finish
-            self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
+            try:
+                self.ready_queue.put(True, timeout=1)  # Wait for training to finish
+                self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
+            except Queue.Full:
+                pass
 
     def train(self, id):
         while True:
@@ -53,7 +56,7 @@ class Agent(object):
             tderror, loss = self.network.train(states=states, actions=actions, terminals=terminals, next_states=next_states, rewards=rewards)
             self.memory.update(idx, priority=tderror)
 
-
+import time
 class Test(Agent):
     def __init__(self, args, environment, network):
         Agent.__init__(self, args, environment, network)
@@ -77,20 +80,26 @@ class Test(Agent):
 
 class Convergence(Agent):
     def __init__(self, args, environment, network):
-        assert args.network_type == 'convergence', 'Convergence Agent must use Convergence Network'
         Agent.__init__(self, args, environment, network)
+        self.convergence_repetitions = args.convergence_repetitions
 
     def train(self, id):
         while True:
-            self.ready_queue.get()  # Notify main thread a training has complete
+            try:
+                self.ready_queue.get(timeout=1)  # Notify main thread a training has complete
 
-            for _ in range(10):
-                states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
-                tderror, loss = self.network.train(states=states, actions=actions, terminals=terminals, next_states=next_states, rewards=rewards, lookaheads=lookaheads)
-                self.memory.update(idx, priority=tderror ** self.args.priority_temperature)
+                for _ in range(self.convergence_repetitions):
+                    states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
+                    priority, loss = self.network.train(states=states,
+                                                        actions=actions,
+                                                        terminals=terminals,
+                                                        next_states=next_states,
+                                                        rewards=rewards)
+                    self.memory.update(idx, priority=priority)
 
-            self.network.update()
-            self.network.clear()
+            except Queue.Empty:
+                pass
+
 
 class QExplorer(Agent):
     def __init__(self, args, environment, network):
