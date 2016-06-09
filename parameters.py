@@ -86,7 +86,7 @@ class Parameters():
             args.network_type = 'linear'
             args.agent_type = 'test'
             args.bypass_sql = True
-            args.copy_frequency = 100000
+            args.copy_frequency = 10
             args.iterations_before_training = 1000
 
         if args.convergence:

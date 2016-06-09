@@ -53,7 +53,7 @@ class Agent(object):
             tderror, loss = self.network.train(states=states, actions=actions, terminals=terminals, next_states=next_states, rewards=rewards)
             self.memory.update(idx, priority=tderror)
 
-
+import time
 class Test(Agent):
     def __init__(self, args, environment, network):
         Agent.__init__(self, args, environment, network)
