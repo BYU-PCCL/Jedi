@@ -59,7 +59,7 @@ def linear(source, output_size, stddev=0.02, initializer='truncated-normal', bia
     activation_fn = _parse_activation(activation_fn)
 
     with tf.variable_scope(name + '_linear') as scope:
-        w = tf.get_variable("weight", [shape[1], output_size], tf.float32, initializer)
+        w = tf.reshape(tf.get_variable("weight", [shape[1] * output_size], tf.float32, initializer), [shape[1], output_size])
         b = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(bias_start))
 
         out = tf.nn.bias_add(tf.matmul(source, w), b)
@@ -75,7 +75,7 @@ def conv2d(source, size, filters, stride, padding='SAME', stddev=0.02, initializ
     activation_fn = _parse_activation(activation_fn)
 
     with tf.variable_scope(name + '_conv2d'):
-        w = tf.get_variable("weight", shape=[size, size, shape[1], filters], initializer=initializer)
+        w = tf.reshape(tf.get_variable("weight", shape=[size * size * shape[1] * filters], initializer=initializer), [size, size, shape[1], filters])
         b = tf.get_variable("bias", [filters], initializer=tf.constant_initializer(bias_start))
 
         c = tf.nn.conv2d(source, w, strides=[1, 1, stride, stride], padding=padding, data_format='NCHW')
@@ -94,7 +94,7 @@ def get(source, index, length):
 
 
 def float16(source):
-    return tf.cast(source, 'float16')
+    return tf.clip_by_value(tf.cast(source, 'float16'), -65504, 65504)
 
 
 def int(shape, name='int', bits=8, unsigned=False):

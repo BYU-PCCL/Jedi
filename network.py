@@ -278,34 +278,38 @@ class Density(Network):
         sigma = op.get(self.sigma, self.inputs.actions, self.environment.get_num_actions())
         a = 0
 
-        result = y - mu
+        result = op.float16(y - mu)
 
-        self.a = result
+        self.y = y
+        self.mu = mu
+        self.a = op.float16(y - mu)
+        self.b = tf.inv(sigma)
+        self.c = tf.cast(result, 'float32') * tf.inv(sigma)
+
 
         result = tf.cast(result, 'float32') * tf.inv(sigma)
 
 
-        self.b = tf.inv(sigma)
-        self.c = result
 
+        self.d = -tf.square(result) / 2
         result = -tf.square(result) / 2
 
-        self.d = result
-        result = tf.exp(result) * tf.inv(sigma) * (1 / np.sqrt(2*np.pi))
 
-        self.e = result
-        result = -(a + tf.log(result))
+        self.e = result + tf.log(tf.inv(sigma))
+        result = result + tf.log(tf.inv(sigma))
 
+
+        result = -result
         self.lossv = tf.reduce_mean(result)
 
         return self.lossv
 
     def debug(self, session, data):
-        lossv, a, b, c, d, e, sigma, variance = session.run([self.lossv, self.a, self.b, self.c, self.d, self.e, self.sigma, self.variance], feed_dict=data)
+        lossv, y, mu, a, b, c, d, e, sigma, variance = session.run([self.lossv, self.y, self.mu, self.a, self.b, self.c, self.d, self.e, self.sigma, self.variance], feed_dict=data)
 
-        print "###############   lossv: {} \t a: {}, {} \t b: {}, {} \t sigma: {}, {}".format(lossv, np.max(a), np.min(a), np.max(b), np.min(b), np.min(sigma), np.max(sigma))
+        print "###############   lossv: {} \t y: {}. {} \t mu:{}, {} \t a: {}, {} \t b: {}, {} \t c: {}, {} \t d: {}, {} \t e: {}, {} \t sigma: {}, {}".format(lossv, np.max(y), np.min(y), np.max(mu), np.min(mu), np.max(a), np.min(a), np.max(b), np.min(b),np.max(c), np.min(c), np.max(d), np.min(d), np.max(e), np.min(e),np.min(sigma), np.max(sigma))
 
-        if np.isnan(sigma).any() or np.isnan(variance).any():
+        if np.isnan(lossv) or lossv == np.inf:
             quit()
 
 
@@ -345,22 +349,29 @@ class ConvergenceDQN(DQN):
 
         with tf.name_scope('random_reset'):
             for var in self.train_vars:
-                 with tf.device(var.device):
-                    mask = tf.reshape(
-                            # sample 1s and 0s (1-d array) to reshape (1's represent reset)
-                            tf.multinomial(tf.log([[1.0-args.convergence_percent_reset, args.convergence_percent_reset]]),
-                                           np.prod(var.get_shape())),
-                            var.get_shape())
-                    rands = var.initial_value.op.outputs[0]  # op to get new random values from initializer
+                with tf.device(var.device):
+                    size = np.prod(var.get_shape().as_list())
+                    num_reset = int(round(size * args.convergence_percent_reset))
 
-                    mask = tf.cast(mask, var.dtype.base_dtype)
-                    new_value = mask * rands + (1-mask) * var
+                    indexes = tf.constant(range(size), dtype=tf.int64)  # if dim > 4000000 else tf.uint32
+                    indexes = tf.random_shuffle(indexes)
+                    indicies_to_reset = tf.slice(indexes, begin=[0], size=[num_reset])
 
-                    self.reset_ops.append(var.assign(new_value))
+                    random_values = tf.truncated_normal([num_reset], stddev=.02, dtype=var.dtype.base_dtype) # todo: use var.initializer
+                    self.reset_ops.append(tf.scatter_update(var, indices=[indicies_to_reset], updates=[random_values]))
 
         self.tensorboard()
 
     def update(self):
+        print 'update', self.training_iterations
         if self.training_iterations % (self.args.copy_frequency * self.args.convergence_repetitions) == 0:
+            print 'actual update', self.training_iterations
+            before = self.sess.run([self.testvar])
+
             self.sess.run(self.assign_ops)  # Update target network
             self.sess.run(self.reset_ops)   # then reset the train network weights
+
+            print '\nafter\n', (self.sess.run([self.testvar])[0] - before[0])==0
+            print '\n\n\n\n'
+
+
