@@ -70,8 +70,7 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 
 # TODO
 # HIGH
-# watch q values over course of game in graph
-# add timeout to threads
+# watch q values over course of game in graph - confirm that the vari
 # dynamic multi-gpu allocation
 
 
@@ -79,7 +78,7 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 # death ends episode
 # negative reward on death
 # add constrained priorities
-# add with op.defaults({'activation_fn': 'relu'}): to ops.py
+# add with op.defaults({'activation_fn': 'relu', 'floatx': 'float16'}): to ops.py
 # rename states_placeholder to state_placeholder and remove all plural inputs
 # dynamically build list of networks for parameters.py
 # add --network_name-parameter dynamic parameters for each network and agent
@@ -87,6 +86,7 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 
 
 # LOW
+# speed in convergence network and prepare for test
 # ssert not nan in train assert not np.isnan(loss_value)
 # dynamic layer labeling
 # dynamic train  ops in network
@@ -104,3 +104,9 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 # clipping the error, but NOT clipping the reward results in very strange behavior, after playing with the clipping values
 # it seems that any activation of the clipping function causes problems (clipping at 49.0 vs 50) -- evidence that error clipping
 # is a terrible way to handle issues
+
+# training on density network -- because the relationship between state and q-value is 1:1, the optimal sigma is zero.
+# it's possible that we could redefine bellman error probablistically and get some idea of variance
+# (r + discount * next_qs[random_index]) which would result in a 1:many relationship more suited for a density model
+# or perhaps the density model is more suited for environments that are more probablistic where choosing an action could
+# be a "risk adjusted" step

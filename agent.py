@@ -132,9 +132,6 @@ class DensityExplorer(Agent):
         action, qs, additional_ops = self.network.q(states=[self.phi])
         variances = additional_ops[0]
 
-        if self.iterations % 1000 == 0:
-            print qs, variances[0], np.argmax(variances[0]), " "
-
         if random.random() <= (self.epsilon if not is_evaluate else self.args.exploration_epsilon_evaluation):
             vprob = variances[0] - np.min(variances[0]) + 0.01
             vprob = vprob / np.sum(vprob)

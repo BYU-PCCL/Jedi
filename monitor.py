@@ -26,7 +26,8 @@ class Stats:
 
         if key in self.list_stats:
             return {"max": np.max(self.list_stats[key]),
-                    "min": np.min(self.list_stats[key])}[operator]
+                    "min": np.min(self.list_stats[key]),
+                    "mean": np.mean(self.list_stats[key])}[operator]
 
         return 0.0
 
@@ -140,18 +141,20 @@ class Monitor:
 
         log = " |  episodes: {}  " \
               "max q: {:<8.4f} " \
+              "q var: {:<8.4f} " \
               "score: [{:>2g},{:<2g}]  " \
               "lr: {:<11.7f} " \
               "eps: {:<9.5} " \
               "loss: {:<10.6f}  " \
               "actions: {}".format(self.environment.get_episodes(),
-                                  float(stats['max_q']),
-                                  stats['min_score'],
-                                  stats['max_score'],
-                                  float(self.network.learning_rate),
-                                  float(self.agent.epsilon),
-                                  float(self.network.batch_loss),
-                                  np.array_str(actions, precision=2))
+                                   float(stats['max_q']),
+                                   float(stats['mean _q']),
+                                   stats['min_score'],
+                                   stats['max_score'],
+                                   float(self.network.learning_rate),
+                                   float(self.agent.epsilon),
+                                   float(self.network.batch_loss),
+                                   np.array_str(actions, precision=2))
 
         self.console_stats = Stats()
 
@@ -173,6 +176,7 @@ class Monitor:
         for stats in [self.console_stats, self.episode_stats, self.eval_stats]:
             if stats is not None:
                 stats.update('q', np.max(q_values) or 0.0)
+                stats.update('var', np.var(q_values or [0.0]))
                 stats.update('action', action)
 
                 if terminal:
