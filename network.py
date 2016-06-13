@@ -267,19 +267,20 @@ class Density(Network):
         conv3,    w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
         fc4,      w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, activation_fn='relu', name='fc4')
         output,   w5, b5 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
-        self.sigma, w6, b6 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='relu', name='variance')
+        raw_sigma, w6, b6 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='relu', name='variance')
 
-        self.sigma += 0.0001
-        self.variance = tf.exp(self.sigma)
-        self.additional_q_ops.append(self.variance)
+        raw_sigma += 0.0001  # to avoid divide by zero
+        self.sigma = tf.exp(raw_sigma)
+        self.additional_q_ops.append(self.sigma)
 
         return output
 
     def loss(self, truth, prediction):
         y = prediction
         mu = truth
-        sigma = op.get(self.variance, self.inputs.actions, self.environment.get_num_actions())
+        sigma = op.get(self.sigma, self.inputs.actions, self.environment.get_num_actions())
 
+        # Gaussian log-likelihood
         result = op.float16(y - mu)  # Primarily to prevent under/overflow since they are already float16
         result = tf.cast(result, 'float32') * tf.inv(sigma)
         result = -tf.square(result) / 2
@@ -332,14 +333,16 @@ class ConvergenceDQN(DQN):
                     indexes = tf.random_shuffle(indexes)
                     indicies_to_reset = tf.slice(indexes, begin=[0], size=[num_reset])
 
+                    self.testvar = var
+
                     random_values = tf.truncated_normal([num_reset], stddev=.02, dtype=var.dtype.base_dtype) # todo: use var.initializer
                     self.reset_ops.append(tf.scatter_update(var, indices=[indicies_to_reset], updates=[random_values]))
 
         self.tensorboard()
 
     def update(self):
-        print 'update', self.training_iterations
-        if self.training_iterations % (self.args.copy_frequency * self.args.convergence_repetitions) == 0:
+
+        if self.training_iterations % self.args.copy_frequency == 0:
             print 'actual update', self.training_iterations
             before = self.sess.run([self.testvar])
 

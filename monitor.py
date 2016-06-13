@@ -90,10 +90,10 @@ class Monitor:
         #             self.q_win.nextRow() if (i + 1) % 3 == 0 else None
         #             self.q_plots.append([plot.plot(pen=(a + 1) * 5) for a in range(self.environment.get_num_actions())])
 
-    def save_stat(self, stat_name, value):
+    def save_stat(self, stat_name, value, is_evaluation):
         if not self.args.bypass_sql:
-            self.cur.execute("INSERT INTO stats (agent_name, episode, stat_name, value) VALUES (%s, %s, %s, %s)",
-                             (self.args.name, self.environment.get_episodes(), stat_name, float(value)))
+            self.cur.execute("INSERT INTO stats (agent_name, episode, stat_name, value, is_evaluation) VALUES (%s, %s, %s, %s, %s)",
+                             (self.args.name, self.environment.get_episodes(), stat_name, float(value), is_evaluation))
             self.commit_ready = True
 
     def commit(self):
@@ -126,7 +126,7 @@ class Monitor:
     def save_stats(self, stats, evaluation=False):
         stats_to_save = ['max_q', 'max_score', 'min_lr', 'min_epsilon', 'max_q', 'min_q']
         for key in stats_to_save:
-            self.save_stat(key, stats[key]) if stats[key] != None else None
+            self.save_stat(key, stats[key], evaluation) if stats[key] != None else None
 
     def print_stats(self, stats, evaluation=False):
 
