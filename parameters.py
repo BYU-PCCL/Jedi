@@ -60,7 +60,7 @@ class Parameters():
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_decay', default=.96, type=float)
-        network_args.add_argument('--learning_rate_decay_step', default=50000, type=float)
+        network_args.add_argument('--learning_rate_decay_step', default=100000, type=float)
         network_args.add_argument('--initializer', default='truncated-normal', type=str, choices=['xavier', 'normal', 'truncated-normal', 'uniform'])
         network_args.add_argument('--rms_eps', default=0.01, type=float)
         network_args.add_argument('--rms_decay', default=.90, type=float)

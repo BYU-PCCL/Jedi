@@ -32,11 +32,11 @@ class DQN(object):
             with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
                 self.actor_network = Type(args, environment, inputs)
                 self.actor_output = self.actor_network.build(inputs.states)
-                self.actor_output_argmax = op.argmax(self.actor_output)
+                self.actor_output_action = self.actor_network.action(self.actor_output)
 
         with tf.device('/gpu:1'):
             with tf.name_scope('loss'):
-                truth = tf.stop_gradient(target_network.truth(train_output=train_output, target_output=target_output))
+                truth = tf.stop_gradient(self.train_network.truth(train_output=train_output, target_output=target_output))
                 prediction = self.train_network.prediction(train_output=train_output, target_output=target_output)
 
                 self.loss_op = self.train_network.loss(truth=truth, prediction=prediction)
@@ -48,7 +48,6 @@ class DQN(object):
                 optimizer = self.train_network.optimizer(self.learning_rate_op)
                 gradient = optimizer.compute_gradients(self.loss_op)
                 gradients += [(grad, var) for grad, var in gradient if grad is not None]
-
                 self.train_op = optimizer.apply_gradients(gradients, global_step=self.global_step)
 
             self.target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
@@ -109,7 +108,7 @@ class DQN(object):
 
     def q(self, **kwargs):
         data = self.build_feed_dict(**kwargs)
-        results = self.sess.run([self.actor_output_argmax, self.actor_output] + self.actor_network.additional_q_ops,
+        results = self.sess.run([self.actor_output_action, self.actor_output] + self.actor_network.additional_q_ops,
                                 feed_dict=data)
 
         return results[0], results[1], results[2:]
@@ -125,7 +124,7 @@ class Network(object):
                          'next_states': op.environment_scale(self.next_states_placeholder, self.environment),
                          'terminals': self.terminals_placeholder}
 
-            processed.update(self.additional_inputs())
+            processed.update(self.preprocessing())
 
             return processed[item]
 
@@ -140,7 +139,7 @@ class Network(object):
                 self.terminals_placeholder = op.int([None], name='terminal')
                 self.rewards_placeholder = op.int([None], name='reward', bits=32)
 
-        def additional_inputs(self):
+        def preprocessing(self):
             return {}
 
     def __init__(self, args, environment, inputs):
@@ -174,6 +173,9 @@ class Network(object):
                                                 self.args.learning_rate_decay,
                                                 staircase=False)
         return tf.maximum(self.args.learning_rate_end, decayed_lr)
+
+    def action(self, output):
+        return op.argmax(output)
 
     def loss(self, truth, prediction):
         delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
@@ -219,7 +221,7 @@ class Constrained(Network):
                 self.lookaheads_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()),
                                                     name='lookaheads')
 
-        def additional_inputs(self):
+        def preprocessing(self):
             return {'lookaheads': op.environment_scale(self.states_placeholder, self.environment)}
 
     def __init__(self, args, environment, inputs):
@@ -245,6 +247,7 @@ class Constrained(Network):
             hhat_conv2, _, _ = op.conv2d(hhat_conv1, size=4, filters=64, stride=2, activation_fn='relu', name='conv2')
             hhat_conv3, _, _ = op.conv2d(hhat_conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
             hhat_truth, _, _ = op.linear(op.flatten(hhat_conv3), 256, activation_fn='relu', name='fc4')
+
             self.constraint_error = tf.reduce_mean((hhat - hhat_truth)**2, reduction_indices=1, name='prediction_error')
 
         return output
@@ -275,42 +278,14 @@ class Density(Network):
     def loss(self, truth, prediction):
         y = prediction
         mu = truth
-        sigma = op.get(self.sigma, self.inputs.actions, self.environment.get_num_actions())
-        a = 0
+        sigma = op.get(self.variance, self.inputs.actions, self.environment.get_num_actions())
 
-        result = op.float16(y - mu)
-
-        self.y = y
-        self.mu = mu
-        self.a = op.float16(y - mu)
-        self.b = tf.inv(sigma)
-        self.c = tf.cast(result, 'float32') * tf.inv(sigma)
-
-
+        result = op.float16(y - mu)  # Primarily to prevent under/overflow since they are already float16
         result = tf.cast(result, 'float32') * tf.inv(sigma)
-
-
-
-        self.d = -tf.square(result) / 2
         result = -tf.square(result) / 2
-
-
-        self.e = result + tf.log(tf.inv(sigma))
         result = result + tf.log(tf.inv(sigma))
 
-
-        result = -result
-        self.lossv = tf.reduce_mean(result)
-
-        return self.lossv
-
-    def debug(self, session, data):
-        lossv, y, mu, a, b, c, d, e, sigma, variance = session.run([self.lossv, self.y, self.mu, self.a, self.b, self.c, self.d, self.e, self.sigma, self.variance], feed_dict=data)
-
-        print "###############   lossv: {} \t y: {}. {} \t mu:{}, {} \t a: {}, {} \t b: {}, {} \t c: {}, {} \t d: {}, {} \t e: {}, {} \t sigma: {}, {}".format(lossv, np.max(y), np.min(y), np.max(mu), np.min(mu), np.max(a), np.min(a), np.max(b), np.min(b),np.max(c), np.min(c), np.max(d), np.min(d), np.max(e), np.min(e),np.min(sigma), np.max(sigma))
-
-        if np.isnan(lossv) or lossv == np.inf:
-            quit()
+        return tf.reduce_mean(-result)
 
 
 class Causal(Network):

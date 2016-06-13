@@ -99,6 +99,7 @@ class AtariEnvironment:
         self.episodes = 0
         self.terminal = False
         self.frames = 0
+        self.lives = 0
         self.state = np.zeros((args.resize_width, args.resize_height), dtype=np.uint8)
         self.buffer = np.zeros((args.buffer_size, args.resize_height, args.resize_width), dtype=np.uint8)
         self.reset()
@@ -122,6 +123,11 @@ class AtariEnvironment:
         self.terminal = self.terminal or self.frames >= self.args.max_frames_per_episode
         self.state = cv2.resize(screen, (self.args.resize_width, self.args.resize_height))
         # cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY)
+
+        if self.lives > self.env.ale.lives():
+            total_reward -= 10
+
+        self.lives = self.env.ale.lives()
 
         # Roll the buffer
         # Add a resized, grayscale image to the buffer
