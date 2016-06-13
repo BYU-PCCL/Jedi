@@ -21,7 +21,7 @@ Density Network
 Because the relationship between state and q-value is 1:1, the optimal sigma is zero.
 It might be possible to redefine bellman error probablistically and introduce some idea of variance for example:
 
-    ```Q = r + discount * next_qs[random_index]```
+```Q = r + discount * next_qs[random_index]```
 
 This would result in the 1:many relationship more suited for a density model. Likewise, the density model is more suited
 for environments that are stochastic in nature. In these environments, a density model may allow us to choose
@@ -35,7 +35,7 @@ Q-Explorer (Sampling according to Q-values)
 -------------------------------------------
 Sampling according to q-values is actually pretty successful when sampling
 
-    ```p(action) ~ q^alpha | alpha = 2 or 2.5```
+```p(action) ~ q^alpha | alpha = 2 or 2.5```
 
 This has the bonus of not needing an explicit epsilon but it doesn't result in a "dramatic" improvement in score.
 However, if q-sampling is equivilant to epsilon greedy exploration, q-sampling should be preferred.
