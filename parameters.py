@@ -58,7 +58,7 @@ class Parameters():
         network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
-        network_args.add_argument('--learning_rate_end', default=0.00025, type=float)
+        network_args.add_argument('--learning_rate_end', default=0.000001, type=float)
         network_args.add_argument('--learning_rate_decay', default=.96, type=float)
         network_args.add_argument('--learning_rate_decay_step', default=100000, type=float)
         network_args.add_argument('--initializer', default='truncated-normal', type=str, choices=['xavier', 'normal', 'truncated-normal', 'uniform'])
