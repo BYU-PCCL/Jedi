@@ -31,7 +31,7 @@ for environments that are stochastic in nature. In these environments, a density
 
 Variance in q-values is relatively constant throughout the entire training experience, ranging from a maximum
 standard deviation of 0.01 to .1.
--**Idea:** Perhaps it's possible to train with a loss function that minimizes q-error and maximizes q-variance.
+ - **Idea:** Perhaps it's possible to train with a loss function that minimizes q-error and maximizes q-variance.
 
 
 Q-Explorer (Sampling according to Q-values)
@@ -48,8 +48,8 @@ It was thought that the network had a hard time differentiating between /barely/
 resulting in an higher-than-expected chance of missing the ball during action sampling. A negative reward on death
 was added to increase q-value variance at critical decision points. This resulted in increased score variance, but not
 substantial improvement in max-score or frequency of max-score.
--**Task:** Prove the impact negative reward on death.
--**Idea:** Try a higher alpha to encourage the explorer and evaluator to be equivalent
+- **Task:** Prove the impact negative reward on death.
+- **Idea:** Try a higher alpha to encourage the explorer and evaluator to be equivalent
 
 
 Float-16
