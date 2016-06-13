@@ -42,7 +42,7 @@ Sampling according to q-values is actually pretty successful when sampling
 
 This has the bonus of not needing an explicit epsilon but it doesn't result in a "dramatic" improvement in score.
 However, if q-sampling is equivalent to epsilon greedy exploration, q-sampling should be preferred.
--**Task:** Run 50-game experiment to confirm that q-sampling is equivalent to epsilon decay across all games.
+- **Task:** Run 50-game experiment to confirm that q-sampling is equivalent to epsilon decay across all games.
 
 It was thought that the network had a hard time differentiating between /barely/ and /safely/ hitting the ball
 resulting in an higher-than-expected chance of missing the ball during action sampling. A negative reward on death
@@ -54,6 +54,7 @@ substantial improvement in max-score or frequency of max-score.
 
 Float-16
 --------
+```
 In : np.array([100000], dtype=np.float16)
 Out: array([ inf], dtype=float16)
 
@@ -77,11 +78,12 @@ Out: array([ inf], dtype=float16)
 
 In : np.array([65504], dtype=np.float16)
 Out: array([ 65504.], dtype=float16)
+```
 
 
 
 Ideas Without Context
 -----------------------
-Sample 15 priorities and 15 random
-parameterize with fft (convolution) - try to find paper and consider implementing
-maximum margin
+- Sample 15 priorities and 15 random
+- parameterize with fft (convolution) - try to find paper and consider implementing
+- maximum margin
