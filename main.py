@@ -70,10 +70,8 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 
 # TODO
 # HIGH
-# watch q values over course of game in graph - confirm that the variance is constant
+# watch q values over course of game in graph - confirm that the vari
 # dynamic multi-gpu allocation
-# negative reward on death may make q-value sampling better as it would increase the variance during frames that matter
-
 
 
 # MEDIUM
@@ -96,6 +94,10 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 # add gray to custom gym
 
 # discussion topics with dr. wingate
+# - density network learning zeros - it appears the loss function is wrong (testing) -- go over it together
+# - causal network q-value out of control
+# - constrained network not learning yet
+# - when prioritizing -- do we prioritize based on delta, or clipped_delta? probably delta...
 # - high level: what are we testing? where are we hoping this takes us? how can we better prepare for a paper?
 
 # findings:
