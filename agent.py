@@ -112,11 +112,15 @@ class QExplorer(Agent):
             return random.randint(0, self.num_actions - 1), None
 
         action, qs, _ = self.network.q(states=[self.phi])
-        qprob = qs[0] - np.min(qs[0]) + 0.01
-        qprob += np.mean(qprob) * self.epsilon  # ensures everyone has chance of being selected, but decays over time
-        qprob = qprob / np.sum(qprob)
 
-        return np.random.choice(self.num_actions, p=qprob), qs[0]
+        if not is_evaluate:
+            qprob = qs[0] - np.min(qs[0]) + 0.01
+            qprob = qprob ** 2.5
+            qprob = qprob / np.sum(qprob)
+
+            return np.random.choice(self.num_actions, p=qprob), qs[0]
+        else:
+            return action[0], qs[0]
 
 
 class DensityExplorer(Agent):

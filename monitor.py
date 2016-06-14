@@ -141,14 +141,14 @@ class Monitor:
 
         log = " |  episodes: {}  " \
               "max q: {:<8.4f} " \
-              "q var: {:<8.4f} " \
+              "q std: {:<8.4f} " \
               "score: [{:>2g},{:<2g}]  " \
               "lr: {:<11.7f} " \
               "eps: {:<9.5} " \
               "loss: {:<10.6f}  " \
               "actions: {}".format(self.environment.get_episodes(),
                                    float(stats['max_q']),
-                                   float(stats['mean _q']),
+                                   float(stats['max_std']),
                                    stats['min_score'],
                                    stats['max_score'],
                                    float(self.network.learning_rate),
@@ -175,8 +175,9 @@ class Monitor:
 
         for stats in [self.console_stats, self.episode_stats, self.eval_stats]:
             if stats is not None:
-                stats.update('q', np.max(q_values) or 0.0)
-                stats.update('var', np.var(q_values or [0.0]))
+                if q_values is not None:
+                    stats.update('q', np.max(q_values))
+                    stats.update('std', np.sqrt(np.var(q_values)))
                 stats.update('action', action)
 
                 if terminal:
