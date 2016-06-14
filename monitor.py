@@ -160,6 +160,7 @@ class Monitor:
 
         if evaluation:
             print(Fore.GREEN, log, Style.RESET_ALL)
+
         else:
             print(" " + log, end="\r")
 

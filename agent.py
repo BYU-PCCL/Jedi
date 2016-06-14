@@ -100,8 +100,10 @@ class Convergence(Agent):
 
         self.sample_queue = Queue.Queue(maxsize=self.args.threads * args.convergence_repetitions)
 
+        del self.threads[1:]  # Only one training thread allowed
+
         self.sample_threads = []
-        for id in range(args.threads):
+        for id in range(args.convergence_sample_threads):
             self.sample_threads.append(Thread(target=self.sample, args=[id]))
             self.sample_threads[-1].setDaemon(True)
 
@@ -116,7 +118,7 @@ class Convergence(Agent):
     def sample(self, id):
         while True:
             try:
-                self.sample_queue.put(self.memory.sample())
+                self.sample_queue.put(self.memory.sample(), timeout=.20)
             except Queue.Full:
                 pass
 
@@ -126,7 +128,7 @@ class Convergence(Agent):
                 self.ready_queue.get(timeout=1)  # Notify main thread a training has complete
 
                 for _ in range(self.args.convergence_repetitions):
-                    states, actions, rewards, next_states, terminals, lookaheads, idx = self.sample_queue.get()
+                    states, actions, rewards, next_states, terminals, lookaheads, idx = self.sample_queue.get(timeout=1)
                     priority, loss = self.network.train(states=states,
                                                         actions=actions,
                                                         terminals=terminals,

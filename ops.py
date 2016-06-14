@@ -10,7 +10,11 @@ def argmax(source, name='argmax'):
 
 
 def max(source, name='max'):
-    return tf.reduce_max(source, reduction_indices=1, name=name)
+    return tf.reduce_max(source, reduction_indices=1, keep_dims=True, name=name)
+
+
+def mean(source, name='mean'):
+    return tf.reduce_mean(source, reduction_indices=1, keep_dims=True, name=name)
 
 
 def flatten(source, name='flatten'):
@@ -89,8 +93,8 @@ def optional_clip(source, min_clip, max_clip, do):
     return tf.clip_by_value(source, min_clip, max_clip) if do else source
 
 
-def get(source, index, length):
-    return sum(source * tf.cast(one_hot(index, length), dtype=source.dtype))
+def get(source, index):
+    return sum(source * tf.cast(one_hot(index, source.get_shape().as_list()[1]), dtype=source.dtype))
 
 
 def float16(source):

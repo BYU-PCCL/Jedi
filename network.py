@@ -23,26 +23,32 @@ class DQN(object):
         with tf.device('/gpu:0'):
             with tf.variable_scope('target_network'):
                 target_network = Type(args, environment, inputs)
-                target_output = target_network.build(inputs.next_states)
+                target_output_next_states = target_network.build(inputs.states)
 
             with tf.variable_scope('train_network'):
                 self.train_network = Type(args, environment, inputs)
-                train_output = self.train_network.build(inputs.states)
+                train_output_states = self.train_network.build(inputs.states)
 
-            with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
-                self.actor_network = Type(args, environment, inputs)
-                self.actor_output = self.actor_network.build(inputs.states)
-                self.actor_output_action = self.actor_network.action(self.actor_output)
+            with tf.variable_scope('train_network', reuse=True):
+                train_output_next_states = self.train_network.build(inputs.next_states)
+
+        #with tf.device('/gpu:3'):
+        with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
+            self.actor_network = Type(args, environment, inputs)
+            self.actor_output = self.actor_network.build(inputs.states)
+            self.actor_output_action = self.actor_network.action(self.actor_output)
 
         with tf.device('/gpu:1'):
             with tf.name_scope('loss'):
-                truth = tf.stop_gradient(self.train_network.truth(train_output=train_output, target_output=target_output))
-                prediction = self.train_network.prediction(train_output=train_output, target_output=target_output)
+                truth = tf.stop_gradient(self.train_network.truth(train_output_states=train_output_states,
+                                                                  train_output_next_states=train_output_next_states,
+                                                                  target_output_next_states=target_output_next_states))
+                prediction = self.train_network.prediction(train_output_states=train_output_states)
 
                 self.loss_op = self.train_network.loss(truth=truth, prediction=prediction)
                 self.priority_op = self.train_network.priority(truth=truth, prediction=prediction)
 
-            # It's about 2x faster for us to compute the gradients than to use optimizer.minimize()
+            # It's about 2x faster for us to compute/apply the gradients than to use optimizer.minimize()
             with tf.name_scope('optimizer'):
                 self.learning_rate_op = self.train_network.learning_rate(step=self.global_step)
                 optimizer = self.train_network.optimizer(self.learning_rate_op)
@@ -151,11 +157,14 @@ class Network(object):
     def build(self, states):
         pass
 
-    def truth(self, train_output, target_output):
-        return op.float16(self.inputs.rewards) + self.args.discount * (1.0 - op.float16(self.inputs.terminals)) * op.float16(op.max(target_output))
+    def truth(self, train_output_states, train_output_next_states, target_output_next_states):
+        # Double DQN - http://arxiv.org/pdf/1509.06461v3.pdf
+        double_q_next = op.get(target_output_next_states, op.argmax(train_output_next_states))
+        return (op.float16(self.inputs.rewards) + self.args.discount *
+                (1.0 - op.float16(self.inputs.terminals)) * op.float16(double_q_next))
 
-    def prediction(self, train_output, target_output):
-        return op.get(op.float16(train_output), self.inputs.actions, self.environment.get_num_actions())
+    def prediction(self, train_output_states):
+        return op.get(op.float16(train_output_states), self.inputs.actions)
 
     def priority(self, truth, prediction):
         return tf.pow(truth - prediction, self.args.priority_temperature)
@@ -195,6 +204,31 @@ class Baseline(Network):
         conv3, w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
         fc4, w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, activation_fn='relu', name='fc4')
         output, w5, b5 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
+
+        return output
+
+    def truth(self, train_output_states, train_output_next_states, target_output_next_states):
+        return op.float16(self.inputs.rewards) + self.args.discount * (
+        1.0 - op.float16(self.inputs.terminals)) * op.float16(op.max(target_output_next_states))
+
+
+class BaselineDuel(Network):
+    def __init__(self, args, environment, inputs):
+        Network.__init__(self, args, environment, inputs)
+
+    def build(self, states):
+        conv1, w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
+        conv2, w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, activation_fn='relu', name='conv2')
+        conv3, w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
+
+        fc4_value, w4, b4 = op.linear(op.flatten(conv3, name="fc4_value"), 512, activation_fn='relu', name='fc4_value')
+        value, w5, b5 = op.linear(fc4_value, 1, activation_fn='none', name='value')
+
+        fc4_advantage, w6, b6 = op.linear(op.flatten(conv3, name="fc4_advantage"), 512, activation_fn='relu', name='fc4_advantage')
+        advantages, w7, b7 = op.linear(fc4_advantage, self.environment.get_num_actions(), activation_fn='none', name='advantages')
+
+        # Dueling DQN - http://arxiv.org/pdf/1511.06581v3.pdf
+        output = value + (advantages - op.mean(advantages))
 
         return output
 
@@ -278,7 +312,7 @@ class Density(Network):
     def loss(self, truth, prediction):
         y = prediction
         mu = truth
-        sigma = op.get(self.sigma, self.inputs.actions, self.environment.get_num_actions())
+        sigma = op.get(self.sigma, self.inputs.actions)
 
         # Gaussian log-likelihood
         result = op.float16(y - mu)  # Primarily to prevent under/overflow since they are already float16

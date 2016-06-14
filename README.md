@@ -2,11 +2,16 @@ Installation
 ============
 
 ```bash
-apt-get install -y python-numpy python-dev cmake zlib1g-dev libjpeg-dev xvfb libav-tools xorg-dev python-opengl libboost-all-dev libsdl2-dev swig
+apt-get install -y python-numpy python-pip python-dev cmake zlib1g-dev libjpeg-dev xvfb libav-tools xorg-dev python-opengl libboost-all-dev libsdl2-dev swig
+
 git clone https://github.com/el3ment/gym
 cd gym
 pip install -e '.[all]'
+
 pip install tqdm pyqtgraph
+
+export TF_BINARY_URL=https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.9.0rc0-cp27-none-linux_x86_64.whl
+sudo pip install --upgrade $TF_BINARY_URL
 ```
 
 
@@ -23,7 +28,9 @@ Density Network
 Because the relationship between state and q-value is 1:1, the optimal sigma is zero.
 It might be possible to redefine bellman error probabilistically and introduce some idea of variance for example:
 
-```Q = r + discount * next_qs[random_index]```
+```
+Q = r + discount * next_qs[random_index]
+```
 
 This would result in the 1:many relationship more suited for a density model. Likewise, the density model is more suited
 for environments that are stochastic in nature. In these environments, a density model may allow us to choose
@@ -38,13 +45,15 @@ Q-Explorer (Sampling according to Q-values)
 -------------------------------------------
 Sampling according to q-values is actually pretty successful when sampling
 
-```p(action) ~ q^alpha | alpha = 2 or 2.5```
+```
+p(action) ~ q^alpha | alpha = 2 or 2.5
+```
 
 This has the bonus of not needing an explicit epsilon but it doesn't result in a "dramatic" improvement in score.
 However, if q-sampling is equivalent to epsilon greedy exploration, q-sampling should be preferred.
 - **Task:** Run 50-game experiment to confirm that q-sampling is equivalent to epsilon decay across all games.
 
-It was thought that the network had a hard time differentiating between /barely/ and /safely/ hitting the ball
+It was thought that the network had a hard time differentiating between *barely* and *safely* hitting the ball
 resulting in an higher-than-expected chance of missing the ball during action sampling. A negative reward on death
 was added to increase q-value variance at critical decision points. This resulted in increased score variance, but not
 substantial improvement in max-score or frequency of max-score.
@@ -87,3 +96,8 @@ Ideas Without Context
 - Sample 15 priorities and 15 random
 - parameterize with fft (convolution) - try to find paper and consider implementing
 - maximum margin
+- gpu:3 test on 2 gpu machine
+- http://arxiv.org/pdf/1512.02011v2.pdf - increase discount rate during training,
+- http://arxiv.org/pdf/1605.05365v2.pdf - consider adding a "duration" output for how long to apply the command
+
+- http://arxiv.org/pdf/1602.07714v1.pdf - gradient/reward clipping sucks

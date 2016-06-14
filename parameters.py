@@ -56,7 +56,7 @@ class Parameters():
 
         network_args = self.parser.add_argument_group('Network')
         network_args.add_argument('--dqn_type', default='dqn', type=str, choices=['dqn', 'convergencedqn'])
-        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained'])
+        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained', 'baselineduel'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.000001, type=float)
@@ -75,6 +75,8 @@ class Parameters():
         network_args.add_argument('--tf_checkpoint_path', default="/tmp/checkpoints", type=str)
         network_args.add_argument('--convergence-repetitions', default=100, type=int, help='calls to train per thread')
         network_args.add_argument('--convergence-percent_reset', default=0.1, type=float, help='[0-1]')
+        network_args.add_argument('--convergence-sample_threads', default=12, type=int)
+
 
     def parse(self):
         args = self.parser.parse_args()
@@ -97,6 +99,9 @@ class Parameters():
             args.agent_type = 'convergence'
             args.exploration_epsilon_decay *= args.convergence_repetitions
             args.copy_frequency *= args.convergence_repetitions
+            args.console_frequency = 50
+            args.evaluate_frequency = 1000
+            args.iterations_before_training = 100000
 
         args.dqn_class = self.parse_dqn(args.dqn_type)
         args.environment_class = self.parse_environment(args.environment_type)
@@ -136,6 +141,7 @@ class Parameters():
 
     def parse_network_type(self, network_string):
         return {'baseline': network.Baseline,
+                'baselineduel': network.BaselineDuel,
                 'linear': network.Linear,
                 'density': network.Density,
                 'causal': network.Causal,
@@ -143,7 +149,6 @@ class Parameters():
 
 
 #environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')
-#environment_args.add_argument('--negative_reward_on_death', action='store_const', const=True, default=False, help='load network and agent')
 
 #harness_args.add_argument('--load_checkpoint', action='store_const', const=True, default=False, help='load network and agent')
 
@@ -151,5 +156,4 @@ class Parameters():
 #agent_args.add_argument('--prioritization_type', default="uniform", help='uniform, h0, h1, or h2')
 #agent_args.add_argument('--clear_priority_frequency', default=0, type=int, help='how often to reset priorities')
 
-#network_args.add_argument('--lookahead', default=5, type=int, help='the number of frames to look ahead when constraining')
 #network_args.add_argument('--constrained_lambda', default=1.0, type=float, help='the lambda used for constrained networks (ignored if network_type is not constrained)')
