@@ -70,7 +70,8 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 
 # TODO
 # HIGH
-# auto-infer the size for op.get()
+# watch q values over course of game in graph - confirm that the vari
+# dynamic multi-gpu allocation
 
 
 # MEDIUM
@@ -91,3 +92,21 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 # dynamic train  ops in network
 # add checkpoints
 # add gray to custom gym
+
+# discussion topics with dr. wingate
+# - density network learning zeros - it appears the loss function is wrong (testing) -- go over it together
+# - causal network q-value out of control
+# - constrained network not learning yet
+# - when prioritizing -- do we prioritize based on delta, or clipped_delta? probably delta...
+# - high level: what are we testing? where are we hoping this takes us? how can we better prepare for a paper?
+
+# findings:
+# clipping the error, but NOT clipping the reward results in very strange behavior, after playing with the clipping values
+# it seems that any activation of the clipping function causes problems (clipping at 49.0 vs 50) -- evidence that error clipping
+# is a terrible way to handle issues
+
+# training on density network -- because the relationship between state and q-value is 1:1, the optimal sigma is zero.
+# it's possible that we could redefine bellman error probablistically and get some idea of variance
+# (r + discount * next_qs[random_index]) which would result in a 1:many relationship more suited for a density model
+# or perhaps the density model is more suited for environments that are more probablistic where choosing an action could
+# be a "risk adjusted" step
