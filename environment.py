@@ -124,7 +124,7 @@ class AtariEnvironment:
         self.state = cv2.resize(screen, (self.args.resize_width, self.args.resize_height))
         # cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY)
 
-        if self.lives > self.env.ale.lives():
+        if self.lives > self.env.ale.lives() and self.args.negative_reward_on_death:
             total_reward -= 10
 
         self.lives = self.env.ale.lives()

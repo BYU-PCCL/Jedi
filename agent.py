@@ -32,6 +32,11 @@ class Agent(object):
             action, qs, _ = self.network.q(states=[self.phi])
             return action[0], qs[0]
 
+    def start_threads(self):
+        if not self.threads[0].isAlive():
+            for thread in self.threads:
+                thread.start()
+
     def after_action(self, state, reward, action, terminal, is_evaluate):
         self.phi[:-1] = self.phi[1:]
         self.phi[-1] = state
@@ -39,9 +44,7 @@ class Agent(object):
         self.memory.add(state, reward, action, terminal)
 
         if self.iterations > self.args.iterations_before_training and self.iterations % self.args.train_frequency == 0:
-            if not self.threads[0].isAlive():
-                for thread in self.threads:
-                    thread.start()
+            self.start_threads()
 
             try:
                 self.ready_queue.put(True, timeout=1)  # Wait for training to finish
@@ -56,7 +59,7 @@ class Agent(object):
             tderror, loss = self.network.train(states=states, actions=actions, terminals=terminals, next_states=next_states, rewards=rewards)
             self.memory.update(idx, priority=tderror)
 
-import time
+
 class Test(Agent):
     def __init__(self, args, environment, network):
         Agent.__init__(self, args, environment, network)
@@ -78,18 +81,52 @@ class Test(Agent):
             print s if s != self.environment.goal else '-', list(self.network.q(states=[[[s] for _ in range(self.args.phi_frames)]])[1][0])
 
 
+class Lookahead(Agent):
+    def __init__(self, args, environment, network):
+        Agent.__init__(self, args, environment, network)
+
+    def train(self, id):
+        while True:
+            self.ready_queue.get()  # Notify main thread a training has complete
+            states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
+            tderror, loss = self.network.train(states=states, actions=actions, terminals=terminals,
+                                               next_states=next_states, rewards=rewards, lookaheads=lookaheads)
+            self.memory.update(idx, priority=tderror)
+
+
 class Convergence(Agent):
     def __init__(self, args, environment, network):
         Agent.__init__(self, args, environment, network)
-        self.convergence_repetitions = args.convergence_repetitions
+
+        self.sample_queue = Queue.Queue(maxsize=self.args.threads * args.convergence_repetitions)
+
+        self.sample_threads = []
+        for id in range(args.threads):
+            self.sample_threads.append(Thread(target=self.sample, args=[id]))
+            self.sample_threads[-1].setDaemon(True)
+
+    def start_threads(self):
+        if not self.threads[0].isAlive():
+            for thread in self.threads:
+                thread.start()
+
+            for sample_thread in self.sample_threads:
+                sample_thread.start()
+
+    def sample(self, id):
+        while True:
+            try:
+                self.sample_queue.put(self.memory.sample())
+            except Queue.Full:
+                pass
 
     def train(self, id):
         while True:
             try:
                 self.ready_queue.get(timeout=1)  # Notify main thread a training has complete
 
-                for _ in range(self.convergence_repetitions):
-                    states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
+                for _ in range(self.args.convergence_repetitions):
+                    states, actions, rewards, next_states, terminals, lookaheads, idx = self.sample_queue.get()
                     priority, loss = self.network.train(states=states,
                                                         actions=actions,
                                                         terminals=terminals,
