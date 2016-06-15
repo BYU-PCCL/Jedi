@@ -8,6 +8,8 @@
 # python main.py --total_ticks=3000000 --name=pinata --negative_reward_on_death
 # python main.py --total_ticks=3000000 --name=pinata --agent_type=qexplorer --negative_reward_on_death
 
+echo "sup"
+
 if [ "$HOSTNAME" = reaper ]; then
     echo "Reaper..."
     sleep 1

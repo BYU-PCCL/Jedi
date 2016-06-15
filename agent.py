@@ -68,7 +68,11 @@ class Test(Agent):
         ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.policy_test
 
         for _ in range(5000):
-            error, loss = self.network.train(states=ideal_states, actions=ideal_actions, terminals=ideal_terminals, next_states=ideal_next_states, rewards=ideal_rewards)
+            error, loss = self.network.train(states=ideal_states,
+                                             actions=ideal_actions,
+                                             terminals=ideal_terminals,
+                                             next_states=ideal_next_states,
+                                             rewards=ideal_rewards)
 
             policy, qs, _ = self.network.q(states=[[[s] for _ in range(self.args.phi_frames)] for s in range(self.environment.size)])
             _, goal_q, _ = self.network.q(states=[[[self.environment.goal - 1] for _ in range(self.args.phi_frames)]])
