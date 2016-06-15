@@ -9,12 +9,12 @@ def argmax(source, name='argmax'):
     return tf.argmax(source, dimension=1, name=name)
 
 
-def max(source, name='max'):
-    return tf.reduce_max(source, reduction_indices=1, keep_dims=True, name=name)
+def max(source, name='max', keep_dims=False):
+    return tf.reduce_max(source, reduction_indices=1, keep_dims=keep_dims, name=name)
 
 
-def mean(source, name='mean'):
-    return tf.reduce_mean(source, reduction_indices=1, keep_dims=True, name=name)
+def mean(source, name='mean', keep_dims=False):
+    return tf.reduce_mean(source, reduction_indices=1, keep_dims=keep_dims, name=name)
 
 
 def flatten(source, name='flatten'):

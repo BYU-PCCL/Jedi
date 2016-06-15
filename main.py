@@ -70,8 +70,7 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 
 # TODO
 # HIGH
-# watch q values over course of game in graph - confirm that the vari
-# dynamic multi-gpu allocation
+# baselineduel not working great
 
 
 # MEDIUM

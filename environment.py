@@ -93,7 +93,7 @@ class ArrayEnvironment:
 class AtariEnvironment:
     def __init__(self, args):
         self.args = args
-        self.env = gym.make('Breakout-gray-v0')
+        self.env = gym.make(args.rom + '-gray-v0')
 
         self.score = 0
         self.episodes = 0

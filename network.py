@@ -158,10 +158,8 @@ class Network(object):
         pass
 
     def truth(self, train_output_states, train_output_next_states, target_output_next_states):
-        # Double DQN - http://arxiv.org/pdf/1509.06461v3.pdf
-        double_q_next = op.get(target_output_next_states, op.argmax(train_output_next_states))
-        return (op.float16(self.inputs.rewards) + self.args.discount *
-                (1.0 - op.float16(self.inputs.terminals)) * op.float16(double_q_next))
+        return op.float16(self.inputs.rewards) + self.args.discount * (
+        1.0 - op.float16(self.inputs.terminals)) * op.float16(op.max(target_output_next_states))
 
     def prediction(self, train_output_states):
         return op.get(op.float16(train_output_states), self.inputs.actions)
@@ -207,10 +205,6 @@ class Baseline(Network):
 
         return output
 
-    def truth(self, train_output_states, train_output_next_states, target_output_next_states):
-        return op.float16(self.inputs.rewards) + self.args.discount * (
-        1.0 - op.float16(self.inputs.terminals)) * op.float16(op.max(target_output_next_states))
-
 
 class BaselineDuel(Network):
     def __init__(self, args, environment, inputs):
@@ -228,9 +222,25 @@ class BaselineDuel(Network):
         advantages, w7, b7 = op.linear(fc4_advantage, self.environment.get_num_actions(), activation_fn='none', name='advantages')
 
         # Dueling DQN - http://arxiv.org/pdf/1511.06581v3.pdf
-        output = value + (advantages - op.mean(advantages))
+        output = value + (advantages - op.mean(advantages, keep_dims=True))
 
         return output
+
+
+class BaselineDouble(Baseline):
+    def truth(self, train_output_states, train_output_next_states, target_output_next_states):
+        # Double DQN - http://arxiv.org/pdf/1509.06461v3.pdf
+        double_q_next = op.get(target_output_next_states, op.argmax(train_output_next_states))
+        return (op.float16(self.inputs.rewards) + self.args.discount *
+                (1.0 - op.float16(self.inputs.terminals)) * op.float16(double_q_next))
+
+
+class BaselineDoubleDuel(BaselineDuel):
+    def truth(self, train_output_states, train_output_next_states, target_output_next_states):
+        # Double DQN - http://arxiv.org/pdf/1509.06461v3.pdf
+        double_q_next = op.get(target_output_next_states, op.argmax(train_output_next_states))
+        return (op.float16(self.inputs.rewards) + self.args.discount *
+                (1.0 - op.float16(self.inputs.terminals)) * op.float16(double_q_next))
 
 
 class Linear(Network):
@@ -240,7 +250,11 @@ class Linear(Network):
     def build(self, states):
         fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1_flatten"), 500, activation_fn='relu', name='fc1')
         fc2,    w2, b2 = op.linear(fc1, 500, name='fc2', activation_fn='relu')
-        output, w3, b3 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='output')
+        value,  w3, b3 = op.linear(fc2, 1, activation_fn='none', name='value')
+        advantages, w4, b4 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='advantages')
+
+        # Dueling DQN - http://arxiv.org/pdf/1511.06581v3.pdf
+        output = value + (advantages - op.mean(advantages, keep_dims=True))
 
         return output
 
@@ -256,7 +270,7 @@ class Constrained(Network):
                                                     name='lookaheads')
 
         def preprocessing(self):
-            return {'lookaheads': op.environment_scale(self.states_placeholder, self.environment)}
+            return {'lookaheads': op.environment_scale(self.lookaheads_placeholder, self.environment)}
 
     def __init__(self, args, environment, inputs):
         Network.__init__(self, args, environment, inputs)

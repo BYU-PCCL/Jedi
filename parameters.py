@@ -31,7 +31,7 @@ class Parameters():
 
         environment_args = self.parser.add_argument_group('Environment')
         environment_args.add_argument('--actions_per_tick', default=1, type=int)
-        environment_args.add_argument('--rom', default="breakout")
+        environment_args.add_argument('--rom', default="Breakout")
         environment_args.add_argument('--environment_type', default="atari")
         environment_args.add_argument('--max_initial_noop', default=8, type=int)
         environment_args.add_argument('--resize_width', default=84, type=int)
@@ -56,7 +56,7 @@ class Parameters():
 
         network_args = self.parser.add_argument_group('Network')
         network_args.add_argument('--dqn_type', default='dqn', type=str, choices=['dqn', 'convergencedqn'])
-        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained', 'baselineduel'])
+        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained', 'baselineduel', 'baselinedouble', 'baselinedoubleduel'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.000001, type=float)
@@ -141,6 +141,8 @@ class Parameters():
 
     def parse_network_type(self, network_string):
         return {'baseline': network.Baseline,
+                'baselinedouble': network.BaselineDouble,
+                'baselinedoubleduel': network.BaselineDoubleDuel,
                 'baselineduel': network.BaselineDuel,
                 'linear': network.Linear,
                 'density': network.Density,
