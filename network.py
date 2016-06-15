@@ -23,7 +23,7 @@ class DQN(object):
         with tf.device('/gpu:0'):
             with tf.variable_scope('target_network'):
                 target_network = Type(args, environment, inputs)
-                target_output_next_states = target_network.build(inputs.states)
+                target_output_next_states = target_network.build(inputs.next_states)
 
             with tf.variable_scope('train_network'):
                 self.train_network = Type(args, environment, inputs)
@@ -250,11 +250,11 @@ class Linear(Network):
     def build(self, states):
         fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1_flatten"), 500, activation_fn='relu', name='fc1')
         fc2,    w2, b2 = op.linear(fc1, 500, name='fc2', activation_fn='relu')
-        output,  w3, b3 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='value')
-        # advantages, w4, b4 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='advantages')
+        value,  w3, b3 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='value')
+        advantages, w4, b4 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='advantages')
 
         # Dueling DQN - http://arxiv.org/pdf/1511.06581v3.pdf
-        # output = value + (advantages - op.mean(advantages, keep_dims=True))
+        output = value + (advantages - op.mean(advantages, keep_dims=True))
 
         return output
 
