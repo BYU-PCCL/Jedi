@@ -29,7 +29,7 @@ is_evaluate = False
 
 # Handle Ctrl + c
 def commander(signal, frame):
-    command = raw_input("\n\n {} Command [args | eval | verbose | quiet]: ".format(args.name))
+    command = raw_input("\n\n {} Command [args | eval | verbose | quiet | reset-network]: ".format(args.name))
     if command == "args":
         for key in sorted(vars(args)):
             print("{0:>40} : {1}".format(key, getattr(args, key)))
@@ -38,6 +38,8 @@ def commander(signal, frame):
         args.verbose = True
     elif command == "quiet":
         args.verbose = False
+    elif command == "reset-network":
+        network.initialize()
     elif command == "eval":
         global eval_pending
         eval_pending = True
@@ -85,27 +87,6 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 
 
 # LOW
-# speed in convergence network and prepare for test
-# ssert not nan in train assert not np.isnan(loss_value)
 # dynamic layer labeling
-# dynamic train  ops in network
 # add checkpoints
 # add gray to custom gym
-
-# discussion topics with dr. wingate
-# - density network learning zeros - it appears the loss function is wrong (testing) -- go over it together
-# - causal network q-value out of control
-# - constrained network not learning yet
-# - when prioritizing -- do we prioritize based on delta, or clipped_delta? probably delta...
-# - high level: what are we testing? where are we hoping this takes us? how can we better prepare for a paper?
-
-# findings:
-# clipping the error, but NOT clipping the reward results in very strange behavior, after playing with the clipping values
-# it seems that any activation of the clipping function causes problems (clipping at 49.0 vs 50) -- evidence that error clipping
-# is a terrible way to handle issues
-
-# training on density network -- because the relationship between state and q-value is 1:1, the optimal sigma is zero.
-# it's possible that we could redefine bellman error probablistically and get some idea of variance
-# (r + discount * next_qs[random_index]) which would result in a 1:many relationship more suited for a density model
-# or perhaps the density model is more suited for environments that are more probablistic where choosing an action could
-# be a "risk adjusted" step

@@ -4,6 +4,7 @@ import os
 import numpy as np
 import ops as op
 
+
 class DQN(object):
     def __init__(self, Type, args, environment):
         self.args = args
@@ -18,52 +19,57 @@ class DQN(object):
         self.sess = self.start_session(args)
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
-        inputs = Type.Inputs(args, environment)
+        with op.context(floatx=tf.float16):
 
-        with tf.device('/gpu:0'):
-            with tf.variable_scope('target_network'):
-                target_network = Type(args, environment, inputs)
-                target_output_next_states = target_network.build(inputs.next_states)
+            inputs = Type.Inputs(args, environment)
 
-            with tf.variable_scope('train_network'):
-                self.train_network = Type(args, environment, inputs)
-                train_output_states = self.train_network.build(inputs.states)
+            with tf.device('/gpu:0'):
+                with tf.variable_scope('target_network'):
+                    target_network = Type(args, environment, inputs)
+                    target_output_next_states = target_network.build(inputs.next_states)
 
-            with tf.variable_scope('train_network', reuse=True):
-                train_output_next_states = self.train_network.build(inputs.next_states)
+                with tf.variable_scope('train_network'):
+                    self.train_network = Type(args, environment, inputs)
+                    train_output_states = self.train_network.build(inputs.states)
 
-        #with tf.device('/gpu:3'):
-        with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
-            self.actor_network = Type(args, environment, inputs)
-            self.actor_output = self.actor_network.build(inputs.states)
-            self.actor_output_action = self.actor_network.action(self.actor_output)
+                with tf.variable_scope('train_network', reuse=True):
+                    train_output_next_states = self.train_network.build(inputs.next_states)
 
-        with tf.device('/gpu:1'):
-            with tf.name_scope('loss'):
-                truth = tf.stop_gradient(self.train_network.truth(train_output_states=train_output_states,
-                                                                  train_output_next_states=train_output_next_states,
-                                                                  target_output_next_states=target_output_next_states))
-                prediction = self.train_network.prediction(train_output_states=train_output_states)
+            #with tf.device('/gpu:3'):
+            with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
+                self.actor_network = Type(args, environment, inputs)
+                self.actor_output = self.actor_network.build(inputs.states)
+                self.actor_output_action = self.actor_network.action(self.actor_output)
 
-                self.loss_op = self.train_network.loss(truth=truth, prediction=prediction)
-                self.priority_op = self.train_network.priority(truth=truth, prediction=prediction)
+            with tf.device('/gpu:1'):
+                with tf.name_scope('loss'):
+                    truth = tf.stop_gradient(self.train_network.truth(train_output_states=train_output_states,
+                                                                      train_output_next_states=train_output_next_states,
+                                                                      target_output_next_states=target_output_next_states))
+                    prediction = self.train_network.prediction(train_output_states=train_output_states)
 
-            # It's about 2x faster for us to compute/apply the gradients than to use optimizer.minimize()
-            with tf.name_scope('optimizer'):
-                self.learning_rate_op = self.train_network.learning_rate(step=self.global_step)
-                optimizer = self.train_network.optimizer(self.learning_rate_op)
-                gradient = optimizer.compute_gradients(self.loss_op)
-                gradients += [(grad, var) for grad, var in gradient if grad is not None]
-                self.train_op = optimizer.apply_gradients(gradients, global_step=self.global_step)
+                    self.loss_op = self.train_network.loss(truth=truth, prediction=prediction)
+                    self.priority_op = self.train_network.priority(truth=truth, prediction=prediction)
 
-            self.target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
-            self.train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network')
-            self.assign_ops = [target.assign(train) for target, train in zip(self.target_vars, self.train_vars)]
+                # It's about 2x faster for us to compute/apply the gradients than to use optimizer.minimize()
+                with tf.name_scope('optimizer'):
+                    self.learning_rate_op = self.train_network.learning_rate(step=self.global_step)
+                    optimizer = self.train_network.optimizer(self.learning_rate_op)
+                    gradient = optimizer.compute_gradients(self.loss_op)
+                    gradients += [(grad, var) for grad, var in gradient if grad is not None]
+                    self.train_op = optimizer.apply_gradients(gradients, global_step=self.global_step)
 
-            self.inputs = inputs
+                self.target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
+                self.train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network')
+                self.assign_ops = [target.assign(train) for target, train in zip(self.target_vars, self.train_vars)]
 
-        self.sess.run(tf.initialize_all_variables())
+                self.inputs = inputs
+        self.initialize_op = tf.initialize_all_variables()
+        self.initialize()
         self.tensorboard()
+
+    def initialize(self):
+        self.sess.run(self.initialize_op)
 
     def total_parameters(self):
         return sum([sum([reduce(lambda x, y: x * y, l.get_shape().as_list()) for l in e]) for e in [self.train_vars]])
@@ -158,11 +164,11 @@ class Network(object):
         pass
 
     def truth(self, train_output_states, train_output_next_states, target_output_next_states):
-        return op.float16(self.inputs.rewards) + self.args.discount * (
-        1.0 - op.float16(self.inputs.terminals)) * op.float16(op.max(target_output_next_states))
+        return op.tofloat(self.inputs.rewards) + self.args.discount * (
+        1.0 - op.tofloat(self.inputs.terminals)) * op.tofloat(op.max(target_output_next_states))
 
     def prediction(self, train_output_states):
-        return op.get(op.float16(train_output_states), self.inputs.actions)
+        return op.get(op.tofloat(train_output_states), self.inputs.actions)
 
     def priority(self, truth, prediction):
         return tf.pow(truth - prediction, self.args.priority_temperature)
@@ -197,13 +203,14 @@ class Baseline(Network):
         Network.__init__(self, args, environment, inputs)
 
     def build(self, states):
-        conv1, w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
-        conv2, w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, activation_fn='relu', name='conv2')
-        conv3, w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
-        fc4, w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, activation_fn='relu', name='fc4')
-        output, w5, b5 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
+        with op.context(default_activation_fn='relu'):
+            conv1, w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
+            conv2, w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
+            conv3, w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
+            fc4, w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, name='fc4')
+            output, w5, b5 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
 
-        return output
+            return output
 
 
 class BaselineDuel(Network):
@@ -211,36 +218,37 @@ class BaselineDuel(Network):
         Network.__init__(self, args, environment, inputs)
 
     def build(self, states):
-        conv1, w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
-        conv2, w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, activation_fn='relu', name='conv2')
-        conv3, w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
+        with op.context(default_activation_fn='relu'):
+            conv1, w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
+            conv2, w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
+            conv3, w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
 
-        fc4_value, w4, b4 = op.linear(op.flatten(conv3, name="fc4_value"), 512, activation_fn='relu', name='fc4_value')
-        value, w5, b5 = op.linear(fc4_value, 1, activation_fn='none', name='value')
+            fc4_value, w4, b4 = op.linear(op.flatten(conv3, name="fc4_value"), 512, name='fc4_value')
+            value, w5, b5 = op.linear(fc4_value, 1, activation_fn='none', name='value')
 
-        fc4_advantage, w6, b6 = op.linear(op.flatten(conv3, name="fc4_advantage"), 512, activation_fn='relu', name='fc4_advantage')
-        advantages, w7, b7 = op.linear(fc4_advantage, self.environment.get_num_actions(), activation_fn='none', name='advantages')
+            fc4_advantage, w6, b6 = op.linear(op.flatten(conv3, name="fc4_advantage"), 512, name='fc4_advantage')
+            advantages, w7, b7 = op.linear(fc4_advantage, self.environment.get_num_actions(), activation_fn='none', name='advantages')
 
-        # Dueling DQN - http://arxiv.org/pdf/1511.06581v3.pdf
-        output = value + (advantages - op.mean(advantages, keep_dims=True))
+            # Dueling DQN - http://arxiv.org/pdf/1511.06581v3.pdf
+            output = value + (advantages - op.mean(advantages, keep_dims=True))
 
-        return output
+            return output
 
 
 class BaselineDouble(Baseline):
     def truth(self, train_output_states, train_output_next_states, target_output_next_states):
         # Double DQN - http://arxiv.org/pdf/1509.06461v3.pdf
         double_q_next = op.get(target_output_next_states, op.argmax(train_output_next_states))
-        return (op.float16(self.inputs.rewards) + self.args.discount *
-                (1.0 - op.float16(self.inputs.terminals)) * op.float16(double_q_next))
+        return (op.tofloat(self.inputs.rewards) + self.args.discount *
+                (1.0 - op.tofloat(self.inputs.terminals)) * op.tofloat(double_q_next))
 
 
 class BaselineDoubleDuel(BaselineDuel):
     def truth(self, train_output_states, train_output_next_states, target_output_next_states):
         # Double DQN - http://arxiv.org/pdf/1509.06461v3.pdf
         double_q_next = op.get(target_output_next_states, op.argmax(train_output_next_states))
-        return (op.float16(self.inputs.rewards) + self.args.discount *
-                (1.0 - op.float16(self.inputs.terminals)) * op.float16(double_q_next))
+        return (op.tofloat(self.inputs.rewards) + self.args.discount *
+                (1.0 - op.tofloat(self.inputs.terminals)) * op.tofloat(double_q_next))
 
 
 class Linear(Network):
@@ -248,13 +256,14 @@ class Linear(Network):
         Network.__init__(self, args, environment, inputs)
 
     def build(self, states):
-        fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1_flatten"), 500, activation_fn='relu', name='fc1')
-        fc2,    w2, b2 = op.linear(fc1, 500, name='fc2', activation_fn='relu')
-        value,  w3, b3 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='value')
-        advantages, w4, b4 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='advantages')
+        with op.context(default_activation_fn='relu'):
+            fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1_flatten"), 500, name='fc1')
+            fc2,    w2, b2 = op.linear(fc1, 500, name='fc2')
+            value,  w3, b3 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='value')
+            advantages, w4, b4 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='advantages')
 
-        # Dueling DQN - http://arxiv.org/pdf/1511.06581v3.pdf
-        output = value + (advantages - op.mean(advantages, keep_dims=True))
+            # Dueling DQN - http://arxiv.org/pdf/1511.06581v3.pdf
+            output = value + (advantages - op.mean(advantages, keep_dims=True))
 
         return output
 
@@ -277,24 +286,24 @@ class Constrained(Network):
 
     def build(self, states):
 
-        with tf.variable_scope('net'):
-            conv1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
-            conv2,     w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, activation_fn='relu', name='conv2')
-            conv3,     w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
-            fc4,       w4, b4 = op.linear(op.flatten(conv3), 256, activation_fn='relu', name='fc4')
+        with tf.variable_scope('net'), op.context(default_activation_fn='relu'):
+            conv1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
+            conv2,     w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
+            conv3,     w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
+            fc4,       w4, b4 = op.linear(op.flatten(conv3), 256, name='fc4')
 
-            h,         w5, b5 = op.linear(fc4, 256, activation_fn='relu', name='h')
-            h1,        w6, b6 = op.linear(h, 256, activation_fn='relu', name='h1')
-            hhat,      w7, b7 = op.linear(h1, 256, activation_fn='relu', name='hhat')
+            h,         w5, b5 = op.linear(fc4, 256, name='h')
+            h1,        w6, b6 = op.linear(h, 256, name='h1')
+            hhat,      w7, b7 = op.linear(h1, 256, name='hhat')
 
-            fc8,       w8, b8 = op.linear(op.merge(h, hhat, name="fc8"), 256, activation_fn='relu', name='fc8')
+            fc8,       w8, b8 = op.linear(op.merge(h, hhat, name="fc8"), 256, name='fc8')
             output,    w9, b9 = op.linear(fc8, self.environment.get_num_actions(), activation_fn='none', name='output')
 
-        with tf.name_scope('prediction'), tf.variable_scope('net', reuse=True):
-            hhat_conv1, _, _ = op.conv2d(self.inputs.lookaheads, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
-            hhat_conv2, _, _ = op.conv2d(hhat_conv1, size=4, filters=64, stride=2, activation_fn='relu', name='conv2')
-            hhat_conv3, _, _ = op.conv2d(hhat_conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
-            hhat_truth, _, _ = op.linear(op.flatten(hhat_conv3), 256, activation_fn='relu', name='fc4')
+        with tf.name_scope('prediction'), tf.variable_scope('net', reuse=True), op.context(default_activation_fn='relu'):
+            hhat_conv1, _, _ = op.conv2d(self.inputs.lookaheads, size=8, filters=32, stride=4, name='conv1')
+            hhat_conv2, _, _ = op.conv2d(hhat_conv1, size=4, filters=64, stride=2, name='conv2')
+            hhat_conv3, _, _ = op.conv2d(hhat_conv2, size=3, filters=64, stride=1, name='conv3')
+            hhat_truth, _, _ = op.linear(op.flatten(hhat_conv3), 256, name='fc4')
 
             self.constraint_error = tf.reduce_mean((hhat - hhat_truth)**2, reduction_indices=1, name='prediction_error')
 
@@ -302,7 +311,7 @@ class Constrained(Network):
 
     def loss(self, truth, prediction):
         delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
-        return tf.reduce_mean(tf.square(delta)) + tf.reduce_mean(op.float16(self.constraint_error))
+        return tf.reduce_mean(tf.square(delta)) + tf.reduce_mean(op.tofloat(self.constraint_error))
 
 
 class Density(Network):
@@ -310,16 +319,17 @@ class Density(Network):
         Network.__init__(self, args, environment, inputs)
 
     def build(self, states):
-        conv1,    w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
-        conv2,    w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, activation_fn='relu', name='conv2')
-        conv3,    w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, activation_fn='relu', name='conv3')
-        fc4,      w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, activation_fn='relu', name='fc4')
-        output,   w5, b5 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
-        raw_sigma, w6, b6 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='relu', name='variance')
+        with op.context(default_activation_fn='relu'):
+            conv1,    w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
+            conv2,    w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
+            conv3,    w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
+            fc4,      w4, b4 = op.linear(op.flatten(conv3, name="fc4"), 512, name='fc4')
+            output,   w5, b5 = op.linear(fc4, self.environment.get_num_actions(), activation_fn='none', name='output')
+            raw_sigma, w6, b6 = op.linear(fc4, self.environment.get_num_actions(), name='variance')
 
-        raw_sigma += 0.0001  # to avoid divide by zero
-        self.sigma = tf.exp(raw_sigma)
-        self.additional_q_ops.append(self.sigma)
+            raw_sigma += 0.0001  # to avoid divide by zero
+            self.sigma = tf.exp(raw_sigma)
+            self.additional_q_ops.append(self.sigma)
 
         return output
 
@@ -329,7 +339,7 @@ class Density(Network):
         sigma = op.get(self.sigma, self.inputs.actions)
 
         # Gaussian log-likelihood
-        result = op.float16(y - mu)  # Primarily to prevent under/overflow since they are already float16
+        result = op.tofloat(y - mu)  # Primarily to prevent under/overflow since they are already float16
         result = tf.cast(result, 'float32') * tf.inv(sigma)
         result = -tf.square(result) / 2
         result = result + tf.log(tf.inv(sigma))
@@ -342,27 +352,27 @@ class Causal(Network):
         Network.__init__(self, args, environment, inputs)
 
     def build(self, states):
+        with op.context(default_activation_fn='relu'):
+            # Common Perception
+            l1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
 
-        # Common Perception
-        l1,     w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, activation_fn='relu', name='conv1')
+            # A Side
+            l2a,    w2, b2 = op.conv2d(l1, size=4, filters=64, stride=2, name='a_conv2')
+            l2a_fc, w3, b3 = op.linear(op.flatten(l2a, name="a_fc4"), 32, activation_fn='none', name='a_fc3')
 
-        # A Side
-        l2a,    w2, b2 = op.conv2d(l1, size=4, filters=64, stride=2, activation_fn='relu', name='a_conv2')
-        l2a_fc, w3, b3 = op.linear(op.flatten(l2a, name="a_fc4"), 32, activation_fn='none', name='a_fc3')
+            # B Side
+            l2b,    w4, b4 = op.conv2d(l1, size=4, filters=64, stride=2, name='b_conv2')
+            l2b_fc, w5, b5 = op.linear(op.flatten(l2b, name="b_fc4"), 32, activation_fn='none', name='b_fc3')
 
-        # B Side
-        l2b,    w4, b4 = op.conv2d(l1, size=4, filters=64, stride=2, activation_fn='relu', name='b_conv2')
-        l2b_fc, w5, b5 = op.linear(op.flatten(l2b, name="b_fc4"), 32, activation_fn='none', name='b_fc3')
+            # Causal Matrix
+            l2a_fc_e = op.expand(l2a_fc, 2, name='a')  # now ?x32x1
+            l2b_fc_e = op.expand(l2b_fc, 1, name='b')  # now ?x1x32
+            causes = op.flatten(tf.batch_matmul(l2a_fc_e, l2b_fc_e, name='causes'))
 
-        # Causal Matrix
-        l2a_fc_e = op.expand(l2a_fc, 2, name='a')  # now ?x32x1
-        l2b_fc_e = op.expand(l2b_fc, 1, name='b')  # now ?x1x32
-        causes = op.flatten(tf.batch_matmul(l2a_fc_e, l2b_fc_e, name='causes'))
+            l4,      w6, b6 = op.linear(causes, 512, name='l4')
+            output,  w5, b5 = op.linear(l4, self.environment.get_num_actions(), activation_fn='none', name='output')
 
-        l4,      w6, b6 = op.linear(causes, 512, activation_fn='relu', name='l4')
-        output,  w5, b5 = op.linear(l4, self.environment.get_num_actions(), activation_fn='none', name='output')
-
-        return output
+            return output
 
 
 class ConvergenceDQN(DQN):

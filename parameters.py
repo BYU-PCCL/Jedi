@@ -77,7 +77,6 @@ class Parameters():
         network_args.add_argument('--convergence-percent_reset', default=0.1, type=float, help='[0-1]')
         network_args.add_argument('--convergence-sample_threads', default=12, type=int)
 
-
     def parse(self):
         args = self.parser.parse_args()
         ignored_args = ['verbose', 'sql_host', 'sql_db', 'sql_port', 'sql_user', 'sql_password',
@@ -149,9 +148,11 @@ class Parameters():
                 'causal': network.Causal,
                 'constrained': network.Constrained}[network_string]
 
-
+Parameters()
+print "sup"
 #environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')
 
+quit()
 #harness_args.add_argument('--load_checkpoint', action='store_const', const=True, default=False, help='load network and agent')
 
 #agent_args.add_argument('--priority_epsilon', default=.05, type=float, help='the epsilon associated with h2 priority')

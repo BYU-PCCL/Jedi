@@ -1,4 +1,19 @@
 import tensorflow as tf
+import contextlib
+import copy
+
+
+_context = {'floatx': tf.float32,
+            'default_activation_fn': 'none'}
+
+
+@contextlib.contextmanager
+def context(**kwargs):
+    global _context
+    previous = copy.copy(_context)
+    _context.update(kwargs)
+    yield
+    _context = previous
 
 
 def one_hot(source, size, name='onehot'):
@@ -52,10 +67,10 @@ def _parse_activation(activation):
     return {
         'relu': tf.nn.relu,
         'sigmoid': tf.nn.sigmoid,
-        'none': None}[activation]
+        'none': None}[activation if activation != 'default' else _context['default_activation_fn']]
 
 
-def linear(source, output_size, stddev=0.02, initializer='truncated-normal', bias_start=0.01, activation_fn='none',
+def linear(source, output_size, stddev=0.02, initializer='truncated-normal', bias_start=0.01, activation_fn='default',
            name='linear'):
     shape = source.get_shape().as_list()
 
@@ -73,7 +88,7 @@ def linear(source, output_size, stddev=0.02, initializer='truncated-normal', bia
 
 
 def conv2d(source, size, filters, stride, padding='SAME', stddev=0.02, initializer='truncated-normal', bias_start=0.01,
-           activation_fn='relu', name='conv2d'):
+           activation_fn='default', name='conv2d'):
     shape = source.get_shape().as_list()
     initializer = _parse_initializer(initializer, stddev)
     activation_fn = _parse_activation(activation_fn)
@@ -97,8 +112,11 @@ def get(source, index):
     return sum(source * tf.cast(one_hot(index, source.get_shape().as_list()[1]), dtype=source.dtype))
 
 
-def float16(source):
-    return tf.clip_by_value(tf.cast(source, 'float16'), -65504, 65504)
+def tofloat(source, safe=True):
+    if safe:
+        return tf.clip_by_value(tf.cast(source, _context['floatx']), _context['floatx'].min, _context['floatx'].max)
+    else:
+        return tf.cast(source, _context['floatx'])
 
 
 def int(shape, name='int', bits=8, unsigned=False):
@@ -107,6 +125,3 @@ def int(shape, name='int', bits=8, unsigned=False):
 
 def environment_scale(states, environment):
     return tf.truediv(tf.to_float(states), tf.to_float(environment.max_state_value()))
-
-# def loss(self, processed_delta, truth, prediction, qlearner):
-#     return tf.reduce_mean(tf.square(processed_delta, name='square'), name='loss')
