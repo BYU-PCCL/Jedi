@@ -10,6 +10,10 @@ pip install -e '.[all]'
 
 pip install tqdm pyqtgraph
 
+# The easiest way to install cv2 is with conda. Do -conda install opencv-
+
+pip install psycopg2 # if you get an error, -sudo apt-get install libpq-dev- may solve it
+
 export TF_BINARY_URL=https://storage.googleapis.com/tensorflow/linux/gpu/tensorflow-0.9.0rc0-cp27-none-linux_x86_64.whl
 sudo pip install --upgrade $TF_BINARY_URL
 ```
