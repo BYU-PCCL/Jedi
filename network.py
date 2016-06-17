@@ -19,7 +19,7 @@ class DQN(object):
         self.sess = self.start_session(args)
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
-        with op.context(floatx=tf.float16):
+        with op.context(floatx=tf.float16, floatsafe=False):
 
             inputs = Type.Inputs(args, environment)
 
@@ -70,7 +70,6 @@ class DQN(object):
 
     def initialize(self):
         self.sess.run(self.initialize_op)
-        print self.sess.run(self.target_vars)
 
     def total_parameters(self):
         return sum([sum([reduce(lambda x, y: x * y, l.get_shape().as_list()) for l in e]) for e in [self.train_vars]])
@@ -204,17 +203,14 @@ class Linear(Network):
         Network.__init__(self, args, environment, inputs)
 
     def build(self, states):
-        with op.context(default_activation_fn='relu'):
-            # _,                              fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1_flatten"), 500, name='fc1')
-            # self.hidden_state_unactivated,  fc2,    w2, self.hidden_state_bias = op.linear(fc1, 500, name='fc2')
-            # _,                              value,  w3, b3 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='value')
-            # _,                              advantages, w4, b4 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='advantages')
-            #
-            # # Dueling DQN - http://arxiv.org/pdf/1511.06581v3.pdf
-            # output = value + (advantages - op.mean(advantages, keep_dims=True))
+        with op.    context(default_activation_fn='relu'):
+            fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1_flatten"), 500, name='fc1')
+            fc2,    w2, b2 = op.linear(fc1, 500, name='fc2')
+            value,  w3, b3 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='value')
+            advantages, w4, b4 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='advantages')
 
-            _, output, w1, b1 = op.linear(op.flatten(states, name="fc1_flatten"), self.environment.get_num_actions(), name='fc1')
-
+            # Dueling DQN - http://arxiv.org/pdf/1511.06581v3.pdf
+            output = value + (advantages - op.mean(advantages, keep_dims=True))
 
         return output
 
@@ -412,17 +408,28 @@ class OptimisticDQN(DQN):
     def __init__(self, Type, args, environment):
         DQN.__init__(self, Type, args, environment)
 
-        for attr in ['hidden_state_unactivated', 'hidden_state_bias']:
-            assert hasattr(self.actor_network, attr), 'Network type needs a {}'.format(attr)
+        qs = self.actor_output
+        actual_mu, actual_sigma = tf.nn.moments(op.tofloat(op.max(qs)), axes=[0])
+        target_sigma = 1.0
+        target_mu = 0
 
-        batch_mean_o = tf.reduce_mean(self.actor_network.hidden_state_unactivated, reduction_indices=0)
-        self.initialize_hidden_state_op = self.actor_network.hidden_state_bias.assign_sub(batch_mean_o + 10.0)
+        self.initialization_cost = (target_mu - actual_mu)**2 + (target_sigma - actual_sigma)**2
+        initialization_optimizer = self.actor_network.optimizer(self.learning_rate_op)
+        self.initialization_train_op = initialization_optimizer.minimize(self.initialization_cost)
         self.initialized = False
+
+        self.initialize_op = tf.initialize_all_variables()
+        self.initialize()
+        self.tensorboard()
 
     def train(self, **kwargs):
         if self.initialized is False:
             data = self.build_feed_dict(**kwargs)
-            self.sess.run([self.initialize_hidden_state_op], feed_dict=data)
             self.initialized = True
+            for _ in range(1000):
+                _, cost = self.sess.run([self.initialization_train_op, self.initialization_cost], feed_dict=data)
+                if cost < 0.0001:
+                    break
+            print "Initialized..."
 
         return DQN.train(self, **kwargs)

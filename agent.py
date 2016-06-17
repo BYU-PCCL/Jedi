@@ -67,19 +67,25 @@ class Test(Agent):
         self.policy_test = environment.generate_test()
         ideal_states, ideal_actions, ideal_rewards, ideal_next_states, ideal_terminals = self.policy_test
 
-        for _ in range(5000):
+        for _ in range(3000):
             error, loss = self.network.train(states=ideal_states,
                                              actions=ideal_actions,
                                              terminals=ideal_terminals,
                                              next_states=ideal_next_states,
                                              rewards=ideal_rewards)
 
+            # print loss
+
             policy, qs, _ = self.network.q(states=[[[s] for _ in range(self.args.phi_frames)] for s in range(self.environment.size)])
+
             _, goal_q, _ = self.network.q(states=[[[self.environment.goal - 1] for _ in range(self.args.phi_frames)]])
             print self.network.training_iterations, \
                 "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)), \
                 np.max(goal_q), \
                 loss
+
+            print qs
+            quit()
 
         for s in range(self.environment.size):
             print s if s != self.environment.goal else '-', list(self.network.q(states=[[[s] for _ in range(self.args.phi_frames)]])[1][0])

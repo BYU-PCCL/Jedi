@@ -94,7 +94,7 @@ class Parameters():
             args.iterations_before_training = 1000
 
         if args.convergence:
-            args.dqn_type = 'convergencedqn'
+            args.dqn_type = 'convergence'
             args.agent_type = 'convergence'
             args.exploration_epsilon_decay *= args.convergence_repetitions
             args.copy_frequency *= args.convergence_repetitions

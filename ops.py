@@ -77,14 +77,16 @@ def linear(source, output_size, stddev=0.02, initializer='truncated-normal', bia
     initializer = _parse_initializer(initializer, stddev)
     activation_fn = _parse_activation(activation_fn)
 
-    with tf.variable_scope(name + '_linear') as scope:
+    with tf.variable_scope(name + '_linear'):
         w = tf.reshape(tf.get_variable("weight", [shape[1] * output_size], tf.float32, initializer), [shape[1], output_size])
         b = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(bias_start))
 
         out = tf.nn.bias_add(tf.matmul(source, w), b)
-        activated = activation_fn(out) if activation_fn is not None else out
 
-        return out, activated, w, b
+        if activation_fn is not None:
+            out = activation_fn(out)
+
+        return out, w, b
 
 
 def conv2d(source, size, filters, stride, padding='SAME', stddev=0.02, initializer='truncated-normal', bias_start=0.01,
@@ -101,7 +103,7 @@ def conv2d(source, size, filters, stride, padding='SAME', stddev=0.02, initializ
         out = tf.nn.bias_add(c, b, data_format='NCHW')
         activated = activation_fn(out) if activation_fn is not None else out
 
-        return out, activated, w, b
+        return activated, w, b
 
 
 def optional_clip(source, min_clip, max_clip, do):
@@ -113,10 +115,10 @@ def get(source, index):
 
 
 def tofloat(source, safe=True):
-    if safe:
-        return tf.clip_by_value(tf.cast(source, _context['floatx']), _context['floatx'].min, _context['floatx'].max)
-    else:
-        return tf.cast(source, _context['floatx'])
+    # if safe:
+    #     return tf.clip_by_value(tf.cast(source, _context['floatx']), _context['floatx'].min, _context['floatx'].max)
+    # else:
+    return tf.cast(source, _context['floatx'])
 
 
 def int(shape, name='int', bits=8, unsigned=False):
@@ -124,4 +126,4 @@ def int(shape, name='int', bits=8, unsigned=False):
 
 
 def environment_scale(states, environment):
-    return tf.truediv(tf.to_float(states), tf.to_float(environment.max_state_value()))
+    return tf.truediv(tf.to_float(states), tf.to_float(environment.max_state_value())) - 0.5
