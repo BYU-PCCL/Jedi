@@ -55,7 +55,7 @@ class Parameters():
         agent_args.add_argument('--priority_temperature', default=2.0, type=float, help='n where tderror^n')
 
         network_args = self.parser.add_argument_group('Network')
-        network_args.add_argument('--dqn_type', default='dqn', type=str, choices=['dqn', 'convergencedqn'])
+        network_args.add_argument('--dqn_type', default='dqn', type=str, choices=['dqn', 'convergence', 'optimistic'])
         network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained', 'baselineduel', 'baselinedouble', 'baselinedoubleduel'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
@@ -124,7 +124,8 @@ class Parameters():
 
     def parse_dqn(self, env_string):
         return {'dqn': network.DQN,
-                'convergencedqn': network.ConvergenceDQN}[env_string]
+                'convergence': network.ConvergenceDQN,
+                'optimistic': network.OptimisticDQN}[env_string]
 
     def parse_environment(self, env_string):
         return {'atari': environment.AtariEnvironment,
@@ -148,11 +149,8 @@ class Parameters():
                 'causal': network.Causal,
                 'constrained': network.Constrained}[network_string]
 
-Parameters()
-print "sup"
 #environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')
 
-quit()
 #harness_args.add_argument('--load_checkpoint', action='store_const', const=True, default=False, help='load network and agent')
 
 #agent_args.add_argument('--priority_epsilon', default=.05, type=float, help='the epsilon associated with h2 priority')

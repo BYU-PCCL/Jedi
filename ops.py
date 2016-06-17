@@ -84,7 +84,7 @@ def linear(source, output_size, stddev=0.02, initializer='truncated-normal', bia
         out = tf.nn.bias_add(tf.matmul(source, w), b)
         activated = activation_fn(out) if activation_fn is not None else out
 
-        return activated, w, b
+        return out, activated, w, b
 
 
 def conv2d(source, size, filters, stride, padding='SAME', stddev=0.02, initializer='truncated-normal', bias_start=0.01,
@@ -101,7 +101,7 @@ def conv2d(source, size, filters, stride, padding='SAME', stddev=0.02, initializ
         out = tf.nn.bias_add(c, b, data_format='NCHW')
         activated = activation_fn(out) if activation_fn is not None else out
 
-        return activated, w, b
+        return out, activated, w, b
 
 
 def optional_clip(source, min_clip, max_clip, do):

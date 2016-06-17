@@ -73,7 +73,9 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothin
 # TODO
 # HIGH
 # baselineduel not working great
-
+# y - mean(y) between layers
+# randomize b
+# center inputs about 0
 
 # MEDIUM
 # death ends episode
