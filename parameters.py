@@ -56,7 +56,7 @@ class Parameters():
 
         network_args = self.parser.add_argument_group('Network')
         network_args.add_argument('--dqn_type', default='dqn', type=str, choices=['dqn', 'convergence', 'optimistic'])
-        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained', 'baselineduel', 'baselinedouble', 'baselinedoubleduel'])
+        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained', 'baselineduel', 'baselinedouble', 'baselinedoubleduel', 'maximummargin'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.000001, type=float)
@@ -147,6 +147,7 @@ class Parameters():
                 'linear': network.Linear,
                 'density': network.Density,
                 'causal': network.Causal,
+                'maximummargin': network.MaximumMargin,
                 'constrained': network.Constrained}[network_string]
 
 #environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')

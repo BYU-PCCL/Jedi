@@ -3,7 +3,7 @@ import subprocess
 import os
 import numpy as np
 import ops as op
-
+import random
 
 class DQN(object):
     def __init__(self, Type, args, environment):
@@ -30,7 +30,7 @@ class DQN(object):
 
                 with tf.variable_scope('train_network'):
                     self.train_network = Type(args, environment, inputs)
-                    train_output_states = self.train_network.build(inputs.states)
+                    self.train_output_states = self.train_network.build(inputs.states)
 
                 with tf.variable_scope('train_network', reuse=True):
                     train_output_next_states = self.train_network.build(inputs.next_states)
@@ -40,13 +40,14 @@ class DQN(object):
                 self.actor_network = Type(args, environment, inputs)
                 self.actor_output = self.actor_network.build(inputs.states)
                 self.actor_output_action = self.actor_network.action(self.actor_output)
+                self.testop = inputs.rewards
 
             with tf.device('/gpu:1'):
                 with tf.name_scope('loss'):
-                    truth = tf.stop_gradient(self.train_network.truth(train_output_states=train_output_states,
+                    truth = tf.stop_gradient(self.train_network.truth(train_output_states=self.train_output_states,
                                                                       train_output_next_states=train_output_next_states,
                                                                       target_output_next_states=target_output_next_states))
-                    prediction = self.train_network.prediction(train_output_states=train_output_states)
+                    prediction = self.train_network.prediction(train_output_states=self.train_output_states)
 
                     self.loss_op = self.train_network.loss(truth=truth, prediction=prediction)
                     self.priority_op = self.train_network.priority(truth=truth, prediction=prediction)
@@ -94,7 +95,7 @@ class DQN(object):
                                                     close_fds=True)
 
     def update(self):
-        if self.training_iterations % self.args.copy_frequency == 0:
+        if (self.training_iterations + 1) % self.args.copy_frequency == 0:
             self.sess.run(self.assign_ops)
 
     def build_feed_dict(self, **kwargs):
@@ -170,6 +171,10 @@ class Network(object):
     def prediction(self, train_output_states):
         return op.get(op.tofloat(train_output_states), self.inputs.actions)
 
+    def loss(self, truth, prediction):
+        delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
+        return tf.reduce_mean(tf.square(delta, name='square'), name='loss')
+
     def priority(self, truth, prediction):
         return tf.pow(truth - prediction, self.args.priority_temperature)
 
@@ -189,10 +194,6 @@ class Network(object):
 
     def action(self, output):
         return op.argmax(output)
-
-    def loss(self, truth, prediction):
-        delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
-        return tf.reduce_mean(tf.square(delta, name='square'), name='loss')
 
     def debug(self, session, data):
         pass
@@ -399,22 +400,60 @@ class ConvergenceDQN(DQN):
         self.tensorboard()
 
     def update(self):
-        if self.training_iterations % self.args.copy_frequency == 0:
+        if (self.training_iterations + 1) % self.args.copy_frequency == 0:
             self.sess.run(self.assign_ops)  # Update target network
             self.sess.run(self.reset_ops)   # then reset the train network weights
+
+
+class MaximumMargin(BaselineDuel):
+    def __init__(self, args, environment, inputs):
+        BaselineDuel.__init__(self, args, environment, inputs)
+
+    def truth(self, train_output_states, train_output_next_states, target_output_next_states):
+        return op.tofloat(self.inputs.rewards) + self.args.discount * (
+        1.0 - op.tofloat(self.inputs.terminals)) * op.tofloat(op.max(target_output_next_states))
+
+    def prediction(self, train_output_states):
+        self.output = train_output_states
+        return op.get(op.tofloat(train_output_states), self.inputs.actions)
+
+    def loss(self, truth, prediction):
+        _, variance = tf.nn.moments(self.output, [1])
+        delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
+        return tf.to_float(tf.reduce_mean(tf.square(delta, name='square'), name='loss')) \
+               + tf.reduce_mean((1.0 - variance)**2)
 
 
 class OptimisticDQN(DQN):
     def __init__(self, Type, args, environment):
         DQN.__init__(self, Type, args, environment)
 
-        qs = self.actor_output
-        actual_mu, actual_sigma = tf.nn.moments(op.tofloat(op.max(qs)), axes=[0])
-        target_sigma = 1.0
-        target_mu = 0
+        # n = environment.get_num_actions()
+        # qs = self.actor_output
+        # qs -= op.min(qs, keep_dims=True)
+        # qs /= op.max(qs, keep_dims=True)
+        # approximate_one_hot_argmax = qs
+        #
+        # index_matrix = op.tofloat(tf.range(n)) * op.tofloat(tf.ones([args.batch_size, n]))
+        # indexes = op.max(approximate_one_hot_argmax * index_matrix)
+        #
+        # mean_index, index_variance = tf.nn.moments(indexes, [0])
+        # target_index = (n - 1.0) / 2.0
+        # target_variance = target_index ** 2
+        #
+        # self.testop = indexes
+        # self.testop2 = index_variance
+        #
+        # self.initialization_cost = (index_variance - target_variance)**2 # + (mean_index - target_index)**2 #
 
-        self.initialization_cost = (target_mu - actual_mu)**2 + (target_sigma - actual_sigma)**2
-        initialization_optimizer = self.actor_network.optimizer(self.learning_rate_op)
+        n = environment.get_num_actions()
+        indexes = range(args.batch_size)
+        random.shuffle(indexes)
+        target_qs = tf.one_hot(tf.constant(indexes) % n, n, on_value=3.0, off_value=2.9, axis=1)
+
+        self.initialization_cost = tf.reduce_mean((self.actor_output - target_qs) ** 2) + tf.reduce_mean((self.train_output_states - target_qs) ** 2)
+
+        initialization_optimizer = self.actor_network.optimizer(learning_rate=0.00001)
         self.initialization_train_op = initialization_optimizer.minimize(self.initialization_cost)
         self.initialized = False
 
@@ -423,13 +462,14 @@ class OptimisticDQN(DQN):
         self.tensorboard()
 
     def train(self, **kwargs):
+        data = self.build_feed_dict(**kwargs)
         if self.initialized is False:
-            data = self.build_feed_dict(**kwargs)
-            self.initialized = True
-            for _ in range(1000):
-                _, cost = self.sess.run([self.initialization_train_op, self.initialization_cost], feed_dict=data)
-                if cost < 0.0001:
+            for i in range(10000):
+                _, cost, = self.sess.run([self.initialization_train_op, self.initialization_cost], feed_dict=data)
+
+                if cost < 0.001:
                     break
-            print "Initialized..."
+
+            self.initialized = True
 
         return DQN.train(self, **kwargs)
