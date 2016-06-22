@@ -28,7 +28,11 @@ focus
 split -v
 focus
 screen -t hatch
-stuff "ssh -t remote_pccl@hatch '$JEDI_REMOTE_COMMAND'\n"
+
+split -v
+focus
+screen -t ghost
+stuff "ssh -t remote@ghost '$JEDI_REMOTE_COMMAND'\n"
 
 layout attach jedi
 layout select jedi

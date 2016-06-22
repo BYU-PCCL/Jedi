@@ -9,6 +9,9 @@ fi
 
 command=$1
 
+NAME=darthvader
+MAX_TICKS=3000000
+
 if [ "$command" = run_all ]; then
 
     export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; ./jedi run_local ; bash"
@@ -21,64 +24,60 @@ elif [ "$command" = dashboard ]; then
 
 elif [ "$command" = run_local ]; then
 
-    if [ "$HOSTNAME" = reaper ]; then
-        echo "Reaper..."
-        sleep 1
-        source ~/.bashrc
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --use_prioritization --rom=Breakout
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --use_prioritization --rom=SpaceInvaders
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --use_prioritization --rom=Seaquest
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --use_prioritization --rom=Pong
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --use_prioritization --rom=Zaxxon
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --use_prioritization --rom=Freeway
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --use_prioritization --rom=Assault
+    echo "$(tput setaf 1)#####"
+    echo "$HOSTNAME"
+    echo "#####$(tput sgr0)"
 
-        python main.py --total_ticks=3000000 --name=muse --network_type=maximummargin
-        python main.py --total_ticks=3000000 --name=muse --batch_size=36 --dqn_type=optimistic
+    sleep 3
+
+    if [ "$HOSTNAME" = reaper ]; then
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --use_prioritization --rom=Breakout &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --use_prioritization --rom=SpaceInvaders  &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --use_prioritization --rom=Seaquest &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --use_prioritization --rom=Pong &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --use_prioritization --rom=Zaxxon &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --use_prioritization --rom=Freeway &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --use_prioritization --rom=Assault &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=maximummargin &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --batch_size=36 --dqn_type=optimistic
 
     elif [ "$HOSTNAME" = naga-All-Series ]; then
-        echo "Naga..."
-        sleep 1
-        source ~/.bashrc
-        python main.py --total_ticks=3000000 --name=nightwatch --rom=Breakout
-        python main.py --total_ticks=3000000 --name=nightwatch --rom=SpaceInvaders
-        python main.py --total_ticks=3000000 --name=nightwatch --rom=Seaquest
-        python main.py --total_ticks=3000000 --name=nightwatch --rom=Pong
-        python main.py --total_ticks=3000000 --name=nightwatch --rom=Zaxxon
-        python main.py --total_ticks=3000000 --name=nightwatch --rom=Freeway
-        python main.py --total_ticks=3000000 --name=nightwatch --rom=Assault
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --rom=Breakout &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --rom=SpaceInvaders &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --rom=Seaquest &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --rom=Pong &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --rom=Zaxxon &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --rom=Freeway &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --rom=Assault
+
     elif [ "$HOSTNAME" = santaka ]; then
-        echo "Santaka..."
-        sleep 1
-        source ~/.bashrc
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Breakout
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=SpaceInvaders
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Seaquest
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Pong
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Zaxxon
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Freeway
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Assault
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Breakout &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=SpaceInvaders &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Seaquest &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Pong &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Zaxxon &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Freeway &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --negative_reward_on_death --use_prioritization --rom=Assault
+
     elif [ "$HOSTNAME" = hatch ]; then
-        echo "Hatch..."
-        sleep 1
-        source ~/.bashrc
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Breakout
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=SpaceInvaders
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Seaquest
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Pong
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Zaxxon
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Freeway
-        python main.py --total_ticks=3000000 --name=nightwatch --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Assault
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Breakout &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=SpaceInvaders &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Seaquest &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Pong &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Zaxxon &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Freeway &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --network_type=baselinedoubleduel --negative_reward_on_death --use_prioritization --rom=Assault
+
     elif [ "$HOSTNAME" = morita.cs.byu.edu ]; then
-        echo "Morita..."
-        sleep 1
-        source ~/.bashrc
-        python main.py --total_ticks=3000000 --name=nightwatch --network_type=baselinedoubleduel --rom=Breakout
-        python main.py --total_ticks=3000000 --name=nightwatch --network_type=baselinedoubleduel --rom=SpaceInvaders
-        python main.py --total_ticks=3000000 --name=nightwatch --network_type=baselinedoubleduel --rom=Seaquest
-        python main.py --total_ticks=3000000 --name=nightwatch --network_type=baselinedoubleduel --rom=Pong
-        python main.py --total_ticks=3000000 --name=nightwatch --network_type=baselinedoubleduel --rom=Zaxxon
-        python main.py --total_ticks=3000000 --name=nightwatch --network_type=baselinedoubleduel --rom=Freeway
-        python main.py --total_ticks=3000000 --name=nightwatch --network_type=baselinedoubleduel --rom=Assault
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=baselinedoubleduel --rom=Breakout &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=baselinedoubleduel --rom=SpaceInvaders &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=baselinedoubleduel --rom=Seaquest &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=baselinedoubleduel --rom=Pong &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=baselinedoubleduel --rom=Zaxxon &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=baselinedoubleduel --rom=Freeway &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=baselinedoubleduel --rom=Assault
+
+    elif [ "$HOSTNAME" = ghost ]; then
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=baselinedoubleduel --rom=Assault
     fi
 fi
