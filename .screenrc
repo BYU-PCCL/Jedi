@@ -51,7 +51,7 @@ layout save jedi
 
 startup_message off
 
-defscrollback 20000
+defscrollback 1000
 bindkey ^[[5;5~ eval "copy" "stuff ^U"
 bindkey ^[[6;5~ eval "copy" "stuff ^D"
 
