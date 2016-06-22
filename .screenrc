@@ -24,6 +24,11 @@ focus
 screen -t naga
 stuff "ssh -t remote@naga '$JEDI_REMOTE_COMMAND'\n"
 
+split -v
+focus
+screen -t doctor
+stuff "ssh -t remote@doctor '$JEDI_REMOTE_COMMAND'\n"
+
 focus
 split -v
 focus
@@ -34,6 +39,11 @@ split -v
 focus
 screen -t ghost
 stuff "ssh -t remote@ghost '$JEDI_REMOTE_COMMAND'\n"
+
+split -v
+focus
+screen -t infinity
+stuff "ssh -t remote@infinity '$JEDI_REMOTE_COMMAND'\n"
 
 layout attach jedi
 layout select jedi

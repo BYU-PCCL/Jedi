@@ -79,5 +79,11 @@ elif [ "$command" = run_local ]; then
 
     elif [ "$HOSTNAME" = ghost ]; then
         python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=baselinedoubleduel --rom=Assault
+
+    elif [ "$HOSTNAME" = doctor ]; then
+       echo "None"
+
+    elif [ "$HOSTNAME" = infinity ]; then
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=baselinedoubleduel --rom=Assault
     fi
 fi
