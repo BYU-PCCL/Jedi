@@ -18,6 +18,12 @@ export TF_BINARY_URL=https://storage.googleapis.com/tensorflow/linux/gpu/tensorf
 sudo pip install --upgrade $TF_BINARY_URL
 ```
 
+You should also consider adding the ./ directory to $PATH so that "jedi" will function like a command
+
+```
+export PATH=$PATH:.
+```
+
 
 Findings
 ========
