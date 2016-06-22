@@ -1,0 +1,46 @@
+mousetrack on
+
+term xterm-256color
+attrcolor b ".I"
+
+layout autosave on
+layout new jedi
+
+screen -t reaper
+stuff "$JEDI_REMOTE_COMMAND\n"
+
+split
+focus
+screen -t morita
+stuff "ssh -t remote@morita '$JEDI_REMOTE_COMMAND'\n"
+
+split -v  
+focus
+screen -t santaka
+stuff "ssh -t remote@santaka '$JEDI_REMOTE_COMMAND'\n"
+
+split -v
+focus
+screen -t naga
+stuff "ssh -t remote@naga '$JEDI_REMOTE_COMMAND'\n"
+
+focus
+split -v
+focus
+screen -t hatch
+stuff "ssh -t remote_pccl@hatch '$JEDI_REMOTE_COMMAND'\n"
+
+layout attach jedi
+layout select jedi
+layout save jedi
+
+startup_message off
+
+defscrollback 20000
+bindkey ^[[5;5~ eval "copy" "stuff ^U"
+bindkey ^[[6;5~ eval "copy" "stuff ^D"
+
+rendition so "Yk"
+caption always "%{= kc}%?%F%{KC}%? %t %?%?"
+hardstatus alwayslastline
+hardstatus string '%{= kG}[%{G}%H%? %1`%?%{g}][%= %{= kw}%-w%{+b yk} %n*%t%?(%u)%? %{-}%+w %=%{g}][%{B}%m/%d %{W}%C%A%{g}]'
