@@ -51,13 +51,13 @@ elif [ "$command" = run_local ]; then
         python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --negative_reward_on_death --rom=Assault
 
     elif [ "$HOSTNAME" = ghost ]; then
-        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --lookahead=5 --rom=Pong &&
-        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --lookahead=5 --rom=Breakout &&
-        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --lookahead=5 --rom=SpaceInvaders &&
-        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --lookahead=5 --rom=Seaquest &&
-        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --lookahead=5 --rom=Zaxxon &&
-        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --lookahead=5 --rom=Freeway &&
-        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --lookahead=5 --rom=Assault
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --agent_type=lookahead --lookahead=5 --rom=Pong &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --agent_type=lookahead --lookahead=5 --rom=Breakout &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --agent_type=lookahead --lookahead=5 --rom=SpaceInvaders &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --agent_type=lookahead --lookahead=5 --rom=Seaquest &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --agent_type=lookahead --lookahead=5 --rom=Zaxxon &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --agent_type=lookahead --lookahead=5 --rom=Freeway &&
+        python main.py --total_ticks=$MAX_TICKS --name=$NAME --network_type=constrained --agent_type=lookahead --lookahead=5 --rom=Assault
 
     elif [ "$HOSTNAME" = naga-All-Series ]; then
         python main.py --total_ticks=$MAX_TICKS --name=$NAME --rom=Pong &&
