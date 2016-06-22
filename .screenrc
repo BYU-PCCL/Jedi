@@ -14,17 +14,18 @@ focus
 screen -t morita
 stuff "ssh -t remote@morita '$JEDI_REMOTE_COMMAND'\n"
 
-split
+split -v
 focus
 screen -t santaka
 stuff "ssh -t remote@santaka '$JEDI_REMOTE_COMMAND'\n"
 
-split
+split -v
 focus
 screen -t naga
 stuff "ssh -t remote@naga '$JEDI_REMOTE_COMMAND'\n"
 
-split
+focus
+split -v
 focus
 screen -t hatch
 stuff "ssh -t remote_pccl@hatch '$JEDI_REMOTE_COMMAND'\n"
