@@ -46,6 +46,15 @@ def commander(signal, frame):
 
 signal.signal(signal.SIGINT, commander)
 
+
+# todo distributed: for i in range(args.num_agents):
+#                   start thread
+#                   in thread:
+#                       start environment
+#                       start agent(environment)
+#                       start network(agent, environment)
+#                       agent.set_network(network)
+
 # Main Loop
 for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothing=.001,
                  bar_format='{percentage:3.0f}% | {bar} | {n_fmt} [{elapsed}, {rate_fmt}]'):

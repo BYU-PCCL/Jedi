@@ -171,3 +171,8 @@ class AtariEnvironment:
 
     def generate_test(self):
         return None
+
+# class DistributedEnvironment():
+        # self.taskId  = 0
+        # self.worldId = 0
+        # self.agentId = 0

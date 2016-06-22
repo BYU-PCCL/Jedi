@@ -28,6 +28,10 @@ def max(source, name='max', keep_dims=False):
     return tf.reduce_max(source, reduction_indices=1, keep_dims=keep_dims, name=name)
 
 
+def min(source, name='min', keep_dims=False):
+    return tf.reduce_min(source, reduction_indices=1, keep_dims=keep_dims, name=name)
+
+
 def mean(source, name='mean', keep_dims=False):
     return tf.reduce_mean(source, reduction_indices=1, keep_dims=keep_dims, name=name)
 

@@ -84,9 +84,6 @@ class Test(Agent):
                 np.max(goal_q), \
                 loss
 
-            print qs
-            quit()
-
         for s in range(self.environment.size):
             print s if s != self.environment.goal else '-', list(self.network.q(states=[[[s] for _ in range(self.args.phi_frames)]])[1][0])
 
@@ -193,3 +190,9 @@ class DensityExplorer(Agent):
 
         else:
             return action[0], qs[0]
+
+# todo distributed:
+    # class Distributed_Runner()
+        #switch thread_id % n:
+            # case 0:
+                # set agent as (w1, t1, a1)
