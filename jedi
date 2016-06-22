@@ -16,7 +16,7 @@ if [ "$command" = run_all ]; then
 
 elif [ "$command" = dashboard ]; then
 
-    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; bash -c \"${@:2}\" ; bash"
+    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc -c \"${@:2}\" ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc"
     screen -c ./.screenrc
 
 elif [ "$command" = run_local ]; then

@@ -139,22 +139,29 @@ class Monitor:
                 actions[action] += 1.0
             actions = np.array((actions / np.sum(actions)) * 100, dtype=np.uint32)
 
-        log = " |  episodes: {}  " \
-              "max q: {:<8.4f} " \
-              "q std: {:<8.4f} " \
-              "score: [{:>2g},{:<2g}]  " \
-              "lr: {:<11.7f} " \
-              "eps: {:<9.5} " \
-              "loss: {:<10.6f}  " \
-              "actions: {}".format(self.environment.get_episodes(),
-                                   float(stats['max_q']),
-                                   float(stats['max_std']),
-                                   stats['min_score'],
-                                   stats['max_score'],
-                                   float(self.network.learning_rate),
-                                   float(self.agent.epsilon),
-                                   float(self.network.batch_loss),
-                                   np.array_str(actions, precision=2))
+        if self.args.verbose:
+            log = " |  episodes: {}  " \
+                  "max q: {:<8.4f} " \
+                  "q std: {:<8.4f} " \
+                  "score: [{:>2g},{:<2g}]  " \
+                  "lr: {:<11.7f} " \
+                  "eps: {:<9.5} " \
+                  "loss: {:<10.6f}  " \
+                  "actions: {}".format(self.environment.get_episodes(),
+                                       float(stats['max_q']),
+                                       float(stats['max_std']),
+                                       stats['min_score'],
+                                       stats['max_score'],
+                                       float(self.network.learning_rate),
+                                       float(self.agent.epsilon),
+                                       float(self.network.batch_loss),
+                                       np.array_str(actions, precision=2))
+        else:
+            log = "| q: {:<7.4f}" \
+                  "s:{:>2g},{:<2g}".format(
+                                       float(stats['max_q']),
+                                       stats['min_score'],
+                                       stats['max_score'])
 
         self.console_stats = Stats()
 
@@ -163,7 +170,6 @@ class Monitor:
 
         else:
             print(" " + log, end="\r")
-
 
     def monitor(self, state, reward, terminal, q_values, action, is_evaluate):
         self.iterations += 1

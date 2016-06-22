@@ -56,8 +56,12 @@ signal.signal(signal.SIGINT, commander)
 #                       agent.set_network(network)
 
 # Main Loop
+bar_format = '{percentage:3.0f}% | {n_fmt} {elapsed} {rate_fmt}'
+if args.verbose:
+    bar_format = '{percentage:3.0f}% | {bar} | {n_fmt} [{elapsed}, {rate_fmt}]'
+
 for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothing=.001,
-                 bar_format='{percentage:3.0f}% | {bar} | {n_fmt} [{elapsed}, {rate_fmt}]'):
+                 bar_format=bar_format):
 
     # Determine if we should evaluate this episode or not
     is_evaluate = is_evaluate or ((tick + 1) % args.evaluate_frequency) == 0
