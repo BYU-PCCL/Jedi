@@ -1,28 +1,74 @@
 # vim: filetype=sh
 
-help="Usage: jedi [run_all | run_local | dashboard]"
+help='echo -e "Usage: jedi\t[-n|--name=] [-t|--max_ticks=]\n\t\t[-c|--command={ run_all | run_local | dashboard }]"' # [-r|--rom=] 
+
+#Defaults for named params:
+COMMAND=run_local
+MAX_TICKS=3000000
+NAME=darthvader
+# ROM=Breakout
+
+###############################################################################
+
+# Parse command line parameters
+for i in "$@"
+do
+  case $i in
+    -c=*|--command=*)
+        COMMAND="${i#*=}"
+        case $COMMAND in
+           run_all|run_local|dashboard) ;; # sounds good
+           *) echo "error: valid commands are { run_all | run_local | dashboard }" >&2; exit 1; ;;
+        esac
+        shift ;;
+    -t=*|--max_ticks=*)
+        MAX_TICKS="${i#*=}"
+        if ! [[ $MAX_TICKS =~ ^[0-9]+$ ]] ; then
+          echo "error: Max_Ticks is not a number, try again" >&2; exit 2
+        fi
+        shift ;;
+    -n=*|--name=*) NAME="${i#*=}";  shift ;;
+#     -r=*|--rom=*)  ROM="${i#*=}";   shift ;;
+    *) echo "Error: unrecognized flags."; $help; exit 2 ;; 
+  esac
+done
 
 if [ "$#" -lt 1 ]; then
-    echo $help
-    exit 1
+    echo "Using defaults!" # $help; exit 1
 fi
 
-command=$1
+###############################################################################
 
-NAME=darthvader
-MAX_TICKS=3000000
+# Just for funzies, report to the user what is used...
+echo
+echo "Using the following parameters"
+echo "     COMMAND: $COMMAND"
+# echo "         ROM: $ROM"
+echo "   MAX_TICKS: $MAX_TICKS"
+echo "        NAME: $NAME"
+echo 
+exit 10
 
-if [ "$command" = run_all ]; then
 
-    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; ./jedi run_local ; bash"
-    screen -c ./.screenrc
+###############################################################################
 
-elif [ "$command" = dashboard ]; then
+
+if [ "$COMMAND" = dashboard ]; then
 
     export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc -c \"${@:2}\" ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc"
     screen -c ./.screenrc
 
-elif [ "$command" = run_local ]; then
+
+###############################################################################
+
+
+elif [ "$COMMAND" = run_all ]; then
+
+    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; ./jedi run_local ; bash"
+    screen -c ./.screenrc
+
+
+elif [ "$COMMAND" = run_local ]; then
 
     echo "$(tput setaf 1)#####"
     echo "$HOSTNAME"
