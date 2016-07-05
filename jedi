@@ -9,8 +9,8 @@ fi
 
 command=$1
 
-NAME=darthvader
-MAX_TICKS=3000000
+NAME=america
+MAX_TICKS=10000000
 
 if [ "$command" = run_all ]; then
 

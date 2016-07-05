@@ -113,6 +113,7 @@ class AtariEnvironment:
     def act(self, action):
         total_reward = 0
         self.frames += 1
+        reward = 0
         for _ in range(self.args.actions_per_tick):
             screen, reward, self.terminal, _ = self.env.step(action)
             total_reward += reward
@@ -121,7 +122,7 @@ class AtariEnvironment:
                 break
 
         self.terminal = self.terminal or self.frames >= self.args.max_frames_per_episode
-        self.state = cv2.resize(screen, (self.args.resize_width, self.args.resize_height))
+        frame = cv2.resize(screen, (self.args.resize_width, self.args.resize_height))
         # cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY)
 
         if self.lives > self.env.ale.lives() and self.args.negative_reward_on_death:
@@ -131,10 +132,10 @@ class AtariEnvironment:
 
         # Roll the buffer
         # Add a resized, grayscale image to the buffer
-        # self.buffer[1:, ...] = self.buffer[0:-1, ...]
-        # self.buffer[-1, ...] = frame
+        self.buffer[1:, ...] = self.buffer[0:-1, ...]
+        self.buffer[-1, ...] = frame
 
-        # self.state = np.max(self.buffer, axis=0)
+        self.state = np.max(self.buffer, axis=0)
 
         self.score += total_reward
 
