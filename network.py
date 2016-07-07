@@ -35,12 +35,12 @@ class DQN(object):
                 with tf.variable_scope('train_network', reuse=True):
                     train_output_next_states = self.train_network.build(inputs.next_states)
 
-            #with tf.device('/gpu:3'):
-            with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
-                self.actor_network = Type(args, environment, inputs)
-                self.actor_output = self.actor_network.build(inputs.states)
-                self.actor_output_action = self.actor_network.action(self.actor_output)
-                self.testop = inputs.rewards
+            with tf.device('/gpu:1'):
+                with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
+                    self.actor_network = Type(args, environment, inputs)
+                    self.actor_output = self.actor_network.build(inputs.states)
+                    self.actor_output_action = self.actor_network.action(self.actor_output)
+                    self.testop = inputs.rewards
 
             with tf.device('/gpu:1'):
                 with tf.name_scope('loss'):
@@ -240,11 +240,12 @@ class BaselineDuel(Network):
             conv1, w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
             conv2, w2, b2 = op.conv2d(conv1, size=4, filters=64, stride=2, name='conv2')
             conv3, w3, b3 = op.conv2d(conv2, size=3, filters=64, stride=1, name='conv3')
+            conv3_flatten = op.flatten(conv3, name="conv3_flatten")
 
-            fc4_value, w4, b4 = op.linear(op.flatten(conv3, name="fc4_value"), 512, name='fc4_value')
+            fc4_value, w4, b4 = op.linear(conv3_flatten, 512, name='fc4_value')
             value, w5, b5 = op.linear(fc4_value, 1, activation_fn='none', name='value')
 
-            fc4_advantage, w6, b6 = op.linear(op.flatten(conv3, name="fc4_advantage"), 512, name='fc4_advantage')
+            fc4_advantage, w6, b6 = op.linear(conv3_flatten, 512, name='fc4_advantages')
             advantages, w7, b7 = op.linear(fc4_advantage, self.environment.get_num_actions(), activation_fn='none', name='advantages')
 
             # Dueling DQN - http://arxiv.org/pdf/1511.06581v3.pdf
@@ -256,7 +257,7 @@ class BaselineDuel(Network):
 class BaselineDouble(Baseline):
     def truth(self, train_output_states, train_output_next_states, target_output_next_states):
         # Double DQN - http://arxiv.org/pdf/1509.06461v3.pdf
-        double_q_next = op.get(target_output_next_states, op.argmax(train_output_next_states))
+        double_q_next = tf.stop_gradient(op.get(target_output_next_states, op.argmax(train_output_next_states)))
         return (op.tofloat(self.inputs.rewards) + self.args.discount *
                 (1.0 - op.tofloat(self.inputs.terminals)) * op.tofloat(double_q_next))
 

@@ -1,7 +1,6 @@
 import random
 import numpy as np
 import gym
-import time
 import cv2
 
 class ArrayEnvironment:

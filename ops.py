@@ -100,7 +100,7 @@ def conv2d(source, size, filters, stride, padding='SAME', stddev=0.02, initializ
     activation_fn = _parse_activation(activation_fn)
 
     with tf.variable_scope(name + '_conv2d'):
-        w = tf.reshape(tf.get_variable("weight", shape=[size * size * shape[1] * filters], initializer=initializer), [size, size, shape[1], filters])
+        w = tf.reshape(tf.get_variable("weight", shape=[size * size * shape[1] * filters], initializer=initializer, dtype=tf.float32), [size, size, shape[1], filters])
         b = tf.get_variable("bias", [filters], initializer=tf.constant_initializer(bias_start))
 
         c = tf.nn.conv2d(source, w, strides=[1, 1, stride, stride], padding=padding, data_format='NCHW')

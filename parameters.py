@@ -81,7 +81,8 @@ class Parameters():
         args = self.parser.parse_args()
         ignored_args = ['verbose', 'sql_host', 'sql_db', 'sql_port', 'sql_user', 'sql_password',
                         'vis', 'name', 'total_ticks', 'evaluate_frequency', 'bypass_sql']
-        changed_args = [key + "=" + str(getattr(args, key)) for key in vars(args) if key not in ignored_args and getattr(args, key) != self.parser.get_default(key)]
+        changed_args = ['rom'] + [key + "=" + str(getattr(args, key)) for key in vars(args)
+                                  if key not in ignored_args and getattr(args, key) != self.parser.get_default(key)]
         changed_args = "-".join(changed_args) if len(changed_args) > 0 else "defaults"
         args.name = args.name + '-' + changed_args + '-' + str(random.randint(10000000, 99999999))
 
