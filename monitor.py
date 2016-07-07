@@ -1,8 +1,5 @@
 from __future__ import print_function
 import numpy as np
-from pyqtgraph.Qt import QtGui, QtCore
-import pyqtgraph as pg
-import cv2
 import psycopg2
 from colorama import Fore, Style
 
@@ -55,40 +52,10 @@ class Monitor:
         self.cur = self.conn.cursor()
         self.save_config(args)
 
-        if args.vis:
-            self.initialize_visualization()
-
         print("\n\nInitialized")
         print("{0:>20} : {1:,} ".format("Network Parameters", self.network.total_parameters()))
         print("{0:>20} : {1} ".format("Name", args.name))
         print("\n")
-
-    def initialize_visualization(self):
-        self.args.vis = True
-
-        # State Visualizer
-        cv2.startWindowThread()
-        cv2.namedWindow("preview", cv2.WINDOW_NORMAL)
-
-        # QT and CV2 seem to dislike working together
-        # Q-Value Visualizer
-        # if self.policy_test:
-        #     self.history = np.zeros((len(self.ideal_states), 500, self.environment.get_num_actions()))
-        #
-        #     self.app = QtGui.QApplication([])
-        #     self.q_win = pg.GraphicsWindow(title="Q Monitor")
-        #     self.q_win.resize(1000, 1000)
-        #     pg.setConfigOptions(antialias=True)
-        #
-        #     if self.policy_test is not None:
-        #         self.q_plots = []
-        #         for i, _ in enumerate(self.ideal_states):
-        #             plot = self.q_win.addPlot()
-        #             plot.hideAxis('bottom')
-        #             plot.hideAxis('left')
-        #             #plot.labelAxis('')
-        #             self.q_win.nextRow() if (i + 1) % 3 == 0 else None
-        #             self.q_plots.append([plot.plot(pen=(a + 1) * 5) for a in range(self.environment.get_num_actions())])
 
     def save_stat(self, stat_name, value, is_evaluation):
         if not self.args.bypass_sql:
@@ -106,23 +73,7 @@ class Monitor:
                              (self.args.name, str(settings)))
             self.commit_ready = True
             self.commit()
-
-    def destroy_visualization(self):
-        cv2.destroyAllWindows()
-        self.args.vis = False
-
-    def visualize_qs(self):
-        policy, batch_qs = self.network.q(self.ideal_states)
-
-        self.history[:, 0:-1, :] = self.history[:, 1:, :]
-        self.history[:, -1, :] = batch_qs
-
-        for i, qs in enumerate(batch_qs):
-            for j, q in enumerate(qs):
-                self.q_plots[i][j].setData(self.history[i, :, j])
-
-        pg.QtGui.QApplication.processEvents()
-
+                      
     def save_stats(self, stats, evaluation=False):
         stats_to_save = ['max_q', 'max_score', 'min_lr', 'min_epsilon', 'max_q', 'min_q']
         for key in stats_to_save:
@@ -173,12 +124,6 @@ class Monitor:
 
     def monitor(self, state, reward, terminal, q_values, action, is_evaluate):
         self.iterations += 1
-
-        if self.args.vis:
-            cv2.imshow("preview", state)
-
-        # if self.iterations % 50 == 0:
-        #     self.visualize_qs()
 
         for stats in [self.console_stats, self.episode_stats, self.eval_stats]:
             if stats is not None:
