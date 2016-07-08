@@ -1,9 +1,10 @@
 # vim: filetype=sh
 
-help='echo -e "Usage: jedi\t[-n|--name=] [-t|--max_ticks=] [--fsl_username=]\n\t\t[-c|--command={ run_all | run_local | dashboard | use_fsl }]"' # [-r|--rom=]
+help='echo -e "Usage: jedi\t {run_all | run_local | dashboard | use_fsl} [-n|--name=] [-t|--max_ticks=] [--fsl_username=]\n\t\t[-c|--command=]"' # [-r|--rom=]
 
 #Defaults for named params:
 COMMAND=run_local
+RUN_COMMAND=""
 MAX_TICKS=3000000
 NAME=darthvader
 ROM=breakout
@@ -15,13 +16,11 @@ FSL_USERNAME=""
 for i in "$@"
 do
   case $i in
-    -c=*|--command=*)
-        COMMAND="${i#*=}"
-        case $COMMAND in
-           run_all|run_local|dashboard|use_fsl) ;; # sounds good
-           *) echo "error: valid commands are { run_all | run_local | dashboard }" >&2; exit 1; ;;
-        esac
-        shift ;;
+    dashboard) echo "db"; COMMAND="dashboard"; shift ;;
+    run_local) echo "rl"; COMMAND="run_local"; shift ;;
+    use_fsl)   echo "fs"; COMMAND="use_fsl"; shift ;;
+    run_all)   echo "al"; COMMAND="run_all"; shift ;;
+    -c=*|--command=*) RUN_COMMAND="${i#*=}"; shift ;;
     -t=*|--max_ticks=*)
         MAX_TICKS="${i#*=}"
         if ! [[ $MAX_TICKS =~ ^[0-9]+$ ]] ; then
@@ -39,6 +38,7 @@ if [ "$#" -lt 1 ]; then
   echo "Using defaults!  I hope that's ok with you."
 fi
 
+echo "NOW USING $COMMAND"
 ###############################################################################
 
 # Just for funzies, report to the user what is used...
@@ -65,23 +65,23 @@ if [ "$COMMAND" = use_fsl ]; then
   #    (instead of read the sbatch sh from a file)
   # FYI: REMOTE_COMMAND has to be the only thing on the line at the end...
   # Please see the `.gen_fsl.run.sh_file.sh` for other parameters
-  ssh jacobj66@ssh.fsl.byu.edu << REMOTE_COMMAND
+  ssh jacobj66@ssh.fsl.byu.edu << END_REMOTE_COMMAND
     cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/
     bash .gen_fsl.run.sh_file.sh --gpus=0 --runCommand="python main.py --total_ticks=$MAX_TICKS --name=$NAME --agent_type=qexplorer --rom=$ROM"  # | sbatch
-REMOTE_COMMAND
+END_REMOTE_COMMAND
 
 ###############################################################################
 
 elif [ "$COMMAND" = dashboard ]; then
 
-    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc -c \"${@:2}\" ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc"
+    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc -c \"$RUN_COMMAND\" ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc"
     screen -c ./.screenrc
 
 ###############################################################################
 
 elif [ "$COMMAND" = run_all ]; then
 
-    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; ./jedi -c=run_local ; bash"
+    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; ./jedi run_local ; bash"
     screen -c ./.screenrc
 
 
@@ -175,6 +175,9 @@ elif [ "$COMMAND" = run_local ]; then
     elif [ "$HOSTNAME" = doctor ]; then
        echo "Noop"
 
+
+    elif [ "$HOSTNAME" = potts ]; then
+       echo "Noop"
 
     fi
 fi

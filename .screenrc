@@ -45,6 +45,11 @@ focus
 screen -t infinity
 stuff "ssh -t remote@infinity '$JEDI_REMOTE_COMMAND'\n"
 
+split -v
+focus
+screen -t potts
+stuff "ssh -t remote@potts '$JEDI_REMOTE_COMMAND'\n"
+
 layout attach jedi
 layout select jedi
 layout save jedi
