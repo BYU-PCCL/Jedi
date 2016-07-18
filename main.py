@@ -29,11 +29,11 @@ is_evaluate = False
 
 # Handle Ctrl + c
 def commander(signal, frame):
-    command = raw_input("\n\n {} Command [args | eval | verbose | quiet | reset-network]: ".format(args.name))
+    command = input("\n\n {} Command [args | eval | verbose | quiet | reset-network]: ".format(args.name))
     if command == "args":
         for key in sorted(vars(args)):
             print("{0:>40} : {1}".format(key, getattr(args, key)))
-        raw_input("Press enter to continue.")
+        input("Press enter to continue.")
     elif command == "verbose":
         args.verbose = True
     elif command == "quiet":

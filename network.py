@@ -4,6 +4,7 @@ import os
 import numpy as np
 import ops as op
 import random
+from functools import reduce
 
 class DQN(object):
     def __init__(self, Type, args, environment):
@@ -102,7 +103,7 @@ class DQN(object):
         # Print a notice to the user if they are passing in unknown variables
         ignored = [key for key in kwargs.keys() if key + '_placeholder' not in self.inputs.__dict__.keys()]
         assert len(ignored) == 0, 'The following arguments passed to train() are not used by this network : ' + str(ignored)
-        return {getattr(self.inputs, key + '_placeholder'): var for (key, var) in kwargs.iteritems()}
+        return {getattr(self.inputs, key + '_placeholder'): var for (key, var) in kwargs.items()}
 
     def train(self, **kwargs):
         data = self.build_feed_dict(**kwargs)

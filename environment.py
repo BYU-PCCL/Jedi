@@ -131,10 +131,12 @@ class AtariEnvironment:
 
         # Roll the buffer
         # Add a resized, grayscale image to the buffer
-        self.buffer[1:, ...] = self.buffer[0:-1, ...]
-        self.buffer[-1, ...] = frame
-
-        self.state = np.max(self.buffer, axis=0)
+        if self.args.buffer_size > 1:
+            self.buffer[1:, ...] = self.buffer[0:-1, ...]
+            self.buffer[-1, ...] = frame
+            self.state = np.max(self.buffer, axis=0)
+        else:
+            self.state = frame
 
         self.score += total_reward
 

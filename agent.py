@@ -2,7 +2,7 @@ from __future__ import division
 import random
 import numpy as np
 from memory import Memory
-import Queue
+import queue as Queue
 from threading import Thread
 
 
@@ -79,13 +79,14 @@ class Test(Agent):
             policy, qs, _ = self.network.q(states=[[[s] for _ in range(self.args.phi_frames)] for s in range(self.environment.size)])
 
             _, goal_q, _ = self.network.q(states=[[[self.environment.goal - 1] for _ in range(self.args.phi_frames)]])
-            print self.network.training_iterations, \
-                "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)), \
-                np.max(goal_q), \
-                loss
+
+            print(self.network.training_iterations,
+                "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)),
+                np.max(goal_q),
+                loss)
 
         for s in range(self.environment.size):
-            print s if s != self.environment.goal else '-', list(self.network.q(states=[[[s] for _ in range(self.args.phi_frames)]])[1][0])
+            print(s if s != self.environment.goal else '-', list(self.network.q(states=[[[s] for _ in range(self.args.phi_frames)]])[1][0]))
 
 
 class Lookahead(Agent):
