@@ -2,7 +2,6 @@ import random
 import numpy as np
 import gym
 import tensorflow as tf
-import cv2
 
 class ArrayEnvironment:
     def __init__(self, args):
@@ -111,8 +110,8 @@ class AtariEnvironment:
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_fraction,
                                     allow_growth=True)
         self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options,
-                                                allow_soft_placement=True,
-                                                log_device_placement=self.args.verbose))
+                                                     allow_soft_placement=True,
+                                                     log_device_placement=self.args.verbose))
 
         self.reset()
 
@@ -137,24 +136,6 @@ class AtariEnvironment:
 
         with self.sess.as_default():
             frame = self.resize_op.eval(feed_dict={self.resize_input: [screen]})[0, :, :, 0]
-
-        frame2 = cv2.resize(screen, (self.args.resize_width, self.args.resize_height))
-
-        import matplotlib.pyplot as plt
-
-        print(frame.shape)
-
-
-        plt.imshow(frame)
-        plt.show()
-
-        plt.imshow(frame2)
-        plt.show()
-
-        plt.imshow(frame - frame2)
-        plt.show()
-
-        # cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY)
 
         if self.lives > self.env.ale.lives() and self.args.negative_reward_on_death:
             total_reward -= 10
