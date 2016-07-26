@@ -1,6 +1,5 @@
 from __future__ import print_function
 import numpy as np
-import psycopg2
 from colorama import Fore, Style
 
 class Stats:
@@ -44,12 +43,15 @@ class Monitor:
 
         # Always try to connect - this avoids issues where you forget to
         # pip install psycopg2, or werid DNS issues, etc.
-        self.conn = psycopg2.connect(host=args.sql_host,
-                                     port=args.sql_port,
-                                     database=args.sql_db,
-                                     user=args.sql_user,
-                                     password=args.sql_password)
-        self.cur = self.conn.cursor()
+        
+        if not self.args.bypass_sql:
+            import psycopg2
+            self.conn = psycopg2.connect(host=args.sql_host,
+                                        port=args.sql_port,
+                                        database=args.sql_db,
+                                        user=args.sql_user,
+                                        password=args.sql_password)
+            self.cur = self.conn.cursor()
         self.save_config(args)
 
         print("\n\nInitialized")
@@ -64,8 +66,9 @@ class Monitor:
             self.commit_ready = True
 
     def commit(self):
-        if self.commit_ready:
-            self.conn.commit()
+        if not self.args.bypass_sql:
+            if self.commit_ready:
+                self.conn.commit()
 
     def save_config(self, settings):
         if not self.args.bypass_sql:

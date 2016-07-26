@@ -2,7 +2,11 @@ from __future__ import division
 import random
 import numpy as np
 from memory import Memory
-import queue as Queue
+import sys
+if sys.version[0] == '2':
+    import Queue as Queue
+else:
+    import queue as Queue
 from threading import Thread
 
 
