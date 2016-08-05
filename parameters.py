@@ -40,7 +40,7 @@ class Parameters():
         environment_args.add_argument('--negative_reward_on_death', action='store_const', const=True, default=False)
 
         agent_args = self.parser.add_argument_group('Agent')
-        agent_args.add_argument('--agent_type', default='agent', type=str, choices=['agent', 'qexplorer', 'density', 'test', 'convergence', 'lookahead'])
+        agent_args.add_argument('--agent_type', default='agent', type=str, choices=['agent', 'qexplorer', 'density', 'test', 'convergence', 'lookahead', 'experiencemodel'])
         agent_args.add_argument('--phi_frames', default=4, type=int)
         agent_args.add_argument('--replay_memory_size', default=1000000, type=int)
         agent_args.add_argument('--batch_size', default=32, type=int)
@@ -56,7 +56,7 @@ class Parameters():
 
         network_args = self.parser.add_argument_group('Network')
         network_args.add_argument('--dqn_type', default='dqn', type=str, choices=['dqn', 'convergence', 'optimistic'])
-        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained', 'baselineduel', 'baselinedouble', 'baselinedoubleduel', 'maximummargin'])
+        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained', 'baselineduel', 'baselinedouble', 'baselinedoubleduel', 'maximummargin', 'weightedlinear'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.00025, type=float)
@@ -130,7 +130,8 @@ class Parameters():
 
     def parse_environment(self, env_string):
         return {'atari': environment.AtariEnvironment,
-                'array': environment.ArrayEnvironment}[env_string]
+                'array': environment.ArrayEnvironment,
+                'maze':  environment.MazeEnvironment}[env_string]
 
     def parse_agent_type(self, agent_string):
         return {'agent': agent.Agent,
@@ -138,7 +139,8 @@ class Parameters():
                 'test': agent.Test,
                 'density': agent.DensityExplorer,
                 'lookahead': agent.Lookahead,
-                'convergence': agent.Convergence}[agent_string]
+                'convergence': agent.Convergence,
+                'experiencemodel': agent.ExperienceAsAModel}[agent_string]
 
     def parse_network_type(self, network_string):
         return {'baseline': network.Baseline,
@@ -149,7 +151,8 @@ class Parameters():
                 'density': network.Density,
                 'causal': network.Causal,
                 'maximummargin': network.MaximumMargin,
-                'constrained': network.Constrained}[network_string]
+                'constrained': network.Constrained,
+                'weightedlinear': network.WeightedLinear}[network_string]
 
 #environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')
 

@@ -17,7 +17,7 @@ class Agent(object):
         self.environment = environment
         self.num_actions = environment.get_num_actions()
         self.memory = Memory(args, environment)
-        self.epsilon = 1
+        self.epsilon = .99999
         self.iterations = 0
         self.ready_queue = Queue.Queue(maxsize=self.args.threads)
 
@@ -52,7 +52,8 @@ class Agent(object):
 
             try:
                 self.ready_queue.put(True, timeout=1)  # Wait for training to finish
-                self.epsilon = max(self.args.exploration_epsilon_end, 1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
+                self.epsilon = max(self.args.exploration_epsilon_end,
+                                   1 - self.network.training_iterations / self.args.exploration_epsilon_decay)
             except Queue.Full:
                 pass
 
@@ -195,6 +196,88 @@ class DensityExplorer(Agent):
 
         else:
             return action[0], qs[0]
+
+
+class ExperienceAsAModel(Agent):
+    def __init__(self, args, environment, network):
+        Agent.__init__(self, args, environment, network)
+
+        self.action_probabilities = np.zeros(args.replay_memory_size, dtype=np.float64)
+        self.state_probabilities = np.zeros(args.replay_memory_size, dtype=np.float64)
+        self.last_action_probability = 0
+
+    def get_action(self, state, is_evaluate):
+
+        action, qs = Agent.get_action(self, state, is_evaluate)
+
+        # Probability of an epsilon-greedy random exploration action
+        # p = (epsilon / N)
+        self.last_action_probability = self.epsilon / self.environment.get_num_actions()
+
+        # Probability of an epsilon-greedy policy action
+        # p = (epsilon / N) + (1 - epsilon)
+        if qs is not None:
+            self.last_action_probability += (1 - self.epsilon)
+
+        return action, qs
+
+    def after_action(self, state, reward, action, terminal, is_evaluate):
+
+        # MUST be done before self.memory.add
+        self.action_probabilities[self.memory.current] = self.last_action_probability
+        self.state_probabilities[self.memory.current] = self.distribution_state(np.array([[state]]))
+
+        return Agent.after_action(self, state, reward, action, terminal, is_evaluate)
+
+    def distribution_state(self, states):
+        assert states.shape[1] == 1
+
+        histogram = (self.memory.screens[0:self.memory.count] - self.environment.get_state_without_agent())
+        histogram = histogram.astype(np.float32)
+        # Pretend we visit all states once
+        histogram += self.environment.States.user * (self.environment.get_state_without_agent() == 0.0)
+        histogram = histogram.mean(0)
+        histogram /= histogram.sum()
+
+        states = states - self.environment.get_state_without_agent()
+        _, _, x, y = np.unravel_index(np.reshape(states, [states.shape[0], -1]).argmax(1), states.shape)
+
+        return histogram[x, y]
+
+    def distribution_action_given_state(self, is_on_policy, states):
+        # p(a | s ; current_policy)
+        alpha = self.epsilon / self.environment.get_num_actions()
+        return ((1 - self.epsilon) * is_on_policy) + alpha
+
+    def train(self, id):
+        while True:
+            self.ready_queue.get()  # Notify main thread a training has complete
+            states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
+            old_policy_action_probabilites = self.action_probabilities[idx].copy()
+            old_policy_state_probabilites = self.state_probabilities[idx].copy()
+
+            policy_actions, qs, additional_ops = self.network.q(states=states)
+            on_policy_mask = actions == policy_actions
+
+            current_policy_action_probabilities = self.distribution_action_given_state(on_policy_mask, states)
+            current_policy_state_probabilities = self.distribution_state(states)
+
+            batch_size = states.shape[0]
+            weights = np.ones(batch_size) / batch_size
+
+            weights *= np.nan_to_num(current_policy_action_probabilities / old_policy_action_probabilites)
+            weights *= np.nan_to_num(current_policy_state_probabilities / old_policy_state_probabilites)
+            weights = np.clip(weights, 0, 10)
+
+            tderror, loss = self.network.train(states=states,
+                                               actions=actions,
+                                               terminals=terminals,
+                                               next_states=next_states,
+                                               rewards=rewards,
+                                               weights=weights)
+
+            self.memory.update(idx, priority=tderror)
+
 
 # todo distributed:
     # class Distributed_Runner()

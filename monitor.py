@@ -1,6 +1,7 @@
 from __future__ import print_function
 import numpy as np
 from colorama import Fore, Style
+import cv2
 
 class Stats:
     def __init__(self):
@@ -54,6 +55,10 @@ class Monitor:
             self.cur = self.conn.cursor()
         self.save_config(args)
 
+        if self.args.vis:
+            cv2.startWindowThread()
+            cv2.namedWindow("preview", cv2.WINDOW_NORMAL)
+
         print("\n\nInitialized")
         print("{0:>20} : {1:,} ".format("Network Parameters", self.network.total_parameters()))
         print("{0:>20} : {1} ".format("Name", args.name))
@@ -91,6 +96,7 @@ class Monitor:
 
             for action in stat_actions:
                 actions[action] += 1.0
+
             actions = np.array((actions / np.sum(actions)) * 100, dtype=np.uint32)
 
         if self.args.verbose:
@@ -127,6 +133,12 @@ class Monitor:
 
     def monitor(self, state, reward, terminal, q_values, action, is_evaluate):
         self.iterations += 1
+
+        if self.args.vis:
+            state = np.array(state, dtype=np.float32)
+            state += np.min(state)
+            state /= np.max(state)
+            cv2.imshow("preview", state)
 
         for stats in [self.console_stats, self.episode_stats, self.eval_stats]:
             if stats is not None:

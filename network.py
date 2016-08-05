@@ -476,3 +476,25 @@ class OptimisticDQN(DQN):
             self.initialized = True
 
         return DQN.train(self, **kwargs)
+
+
+class WeightedLinear(Linear):
+    class Inputs(Network.Inputs):
+        def __init__(self, args, environment):
+            Network.Inputs.__init__(self, args, environment)
+
+            with tf.name_scope('network_specific_inputs'):
+                self.lookaheads_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()),
+                                                     name='lookaheads')
+                self.weights_placeholder = op.float([None], name='weight')
+
+        def preprocessing(self):
+            return {'weights': op.tofloat(self.weights_placeholder)}
+
+    def __init__(self, args, environment, inputs):
+        Network.__init__(self, args, environment, inputs)
+        self.inputs = inputs
+
+    def loss(self, truth, prediction):
+        delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
+        return tf.reduce_sum(op.tofloat(self.inputs.weights_placeholder) * tf.square(delta, name='square'), name='loss')

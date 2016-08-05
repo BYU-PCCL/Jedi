@@ -126,6 +126,10 @@ def tofloat(source, safe=True):
     return tf.cast(source, _context['floatx'])
 
 
+def float(shape, name='int', bits=32):
+    return tf.placeholder('float' + str(bits), shape, name=name)
+
+
 def int(shape, name='int', bits=8, unsigned=False):
     return tf.placeholder(('u' if unsigned else '') + 'int' + str(bits), shape, name=name)
 
