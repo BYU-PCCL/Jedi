@@ -3,6 +3,7 @@ import random
 import numpy as np
 from memory import Memory
 import sys
+
 if sys.version[0] == '2':
     import Queue as Queue
 else:
@@ -61,7 +62,8 @@ class Agent(object):
         while True:
             self.ready_queue.get()  # Notify main thread a training has complete
             states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
-            tderror, loss = self.network.train(states=states, actions=actions, terminals=terminals, next_states=next_states, rewards=rewards)
+            tderror, loss = self.network.train(states=states, actions=actions, terminals=terminals,
+                                               next_states=next_states, rewards=rewards)
             self.memory.update(idx, priority=tderror)
 
 
@@ -81,17 +83,19 @@ class Test(Agent):
 
             # print loss
 
-            policy, qs, _ = self.network.q(states=[[[s] for _ in range(self.args.phi_frames)] for s in range(self.environment.size)])
+            policy, qs, _ = self.network.q(
+                states=[[[s] for _ in range(self.args.phi_frames)] for s in range(self.environment.size)])
 
             _, goal_q, _ = self.network.q(states=[[[self.environment.goal - 1] for _ in range(self.args.phi_frames)]])
 
             print(self.network.training_iterations,
-                "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)),
-                np.max(goal_q),
-                loss)
+                  "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)),
+                  np.max(goal_q),
+                  loss)
 
         for s in range(self.environment.size):
-            print(s if s != self.environment.goal else '-', list(self.network.q(states=[[[s] for _ in range(self.args.phi_frames)]])[1][0]))
+            print(s if s != self.environment.goal else '-',
+                  list(self.network.q(states=[[[s] for _ in range(self.args.phi_frames)]])[1][0]))
 
 
 class Lookahead(Agent):
@@ -202,8 +206,9 @@ class ExperienceAsAModel(Agent):
     def __init__(self, args, environment, network):
         Agent.__init__(self, args, environment, network)
 
-        self.action_probabilities = np.zeros(args.replay_memory_size, dtype=np.float64)
-        self.state_probabilities = np.zeros(args.replay_memory_size, dtype=np.float64)
+        self.action_probabilities = np.zeros(args.replay_memory_size, dtype=np.float32)
+        self.state_probabilities = np.zeros(args.replay_memory_size, dtype=np.float32)
+        self.state_histogram = np.ones(np.prod(environment.get_state_space()), dtype=np.float32)
         self.last_action_probability = 0
 
     def get_action(self, state, is_evaluate):
@@ -225,29 +230,32 @@ class ExperienceAsAModel(Agent):
 
         # MUST be done before self.memory.add
         self.action_probabilities[self.memory.current] = self.last_action_probability
-        self.state_probabilities[self.memory.current] = self.distribution_state(np.array([[state]]))
+
+        if self.memory.count > self.args.replay_memory_size:
+            self.state_histogram -= self.memory.screens[self.memory.current, 0]
+
+        self.state_histogram += state[0]
+        self.state_probabilities[self.memory.current] = self.distribution_state(state)
 
         return Agent.after_action(self, state, reward, action, terminal, is_evaluate)
 
     def distribution_state(self, states):
-        assert states.shape[1] == 1
+        histogram = self.state_histogram / (self.memory.count + self.memory.screens.shape[-1] + 1)
+        positions = states.argmax(3)[:, 0, 0] if len(states.shape) > 2 else states.argmax(1)
 
-        histogram = (self.memory.screens[0:self.memory.count] - self.environment.get_state_without_agent())
-        histogram = histogram.astype(np.float32)
-        # Pretend we visit all states once
-        histogram += self.environment.States.user * (self.environment.get_state_without_agent() == 0.0)
-        histogram = histogram.mean(0)
-        histogram /= histogram.sum()
-
-        states = states - self.environment.get_state_without_agent()
-        _, _, x, y = np.unravel_index(np.reshape(states, [states.shape[0], -1]).argmax(1), states.shape)
-
-        return histogram[x, y]
+        return histogram[positions]
 
     def distribution_action_given_state(self, is_on_policy, states):
         # p(a | s ; current_policy)
         alpha = self.epsilon / self.environment.get_num_actions()
         return ((1 - self.epsilon) * is_on_policy) + alpha
+
+    def policy(self):
+        states = np.expand_dims(np.eye(144), 1)
+        states = np.expand_dims(states, 1)
+        actions, qs, _ = self.network.q(states=states)
+
+        return actions
 
     def train(self, id):
         while True:
@@ -267,7 +275,11 @@ class ExperienceAsAModel(Agent):
 
             weights *= np.nan_to_num(current_policy_action_probabilities / old_policy_action_probabilites)
             weights *= np.nan_to_num(current_policy_state_probabilities / old_policy_state_probabilites)
+
             weights = np.clip(weights, 0, 10)
+
+            if id == 0:
+                print np.array_str(self.policy(), max_line_width=144)
 
             tderror, loss = self.network.train(states=states,
                                                actions=actions,
@@ -279,8 +291,8 @@ class ExperienceAsAModel(Agent):
             self.memory.update(idx, priority=tderror)
 
 
-# todo distributed:
-    # class Distributed_Runner()
-        #switch thread_id % n:
+            # todo distributed:
+            # class Distributed_Runner()
+            # switch thread_id % n:
             # case 0:
-                # set agent as (w1, t1, a1)
+            # set agent as (w1, t1, a1)

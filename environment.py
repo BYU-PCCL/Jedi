@@ -219,7 +219,7 @@ class MazeEnvironment:
         self.reset()
 
     def get_num_actions(self):
-        return 5
+        return 4
 
     def get_state_space(self):
         return self.get_state().shape
@@ -228,11 +228,10 @@ class MazeEnvironment:
         self.frames += 1
 
         delta_position = np.array({
-            0: (0, 0),
-            1: (-1, 0),  # Down
-            2: (1, 0),   # Up
-            3: (0, 1),   # Right
-            4: (0, -1)   # Left
+            0: (-1, 0),  # Down
+            1: (1, 0),   # Up
+            2: (0, 1),   # Right
+            3: (0, -1)   # Left
         }[action])
 
         proposed_position = self.position + delta_position
@@ -258,18 +257,18 @@ class MazeEnvironment:
     def get_score(self):
         return self.score
 
-    def get_state_without_agent(self):
+    def get_maze_without_agent(self):
         goals = np.array(self.maze == self.Objects.goal, dtype=np.uint8) * self.States.goal
         state = np.array(self.maze == self.Objects.wall, dtype=np.uint8) * self.States.wall
         return state + goals
 
     def get_state(self):
-        state = self.get_state_without_agent()
-        state[self.position[0], self.position[1]] = self.States.user
-        return state
+        state = np.zeros(np.prod(self.maze.shape))
+        state[np.ravel_multi_index(self.position, self.maze.shape)] = 1
+        return np.atleast_2d(state)
 
     def max_state_value(self):
-        return 255
+        return 1
 
     def get_terminal(self):
         self.terminal = self.terminal or ((self.get_maze_position(self.position) == self.Objects.goal) or self.frames >= self.args.max_frames_per_episode)
@@ -281,12 +280,12 @@ class MazeEnvironment:
         return np.array([
             [l, l, l, l, l, l, l, l, l, l, l, l],  # [w w w w w w w w w w w w]
             [l, _, _, _, _, _, _, _, _, _, G, l],  # [w       w       w     w]
-            [l, _, _, _, _, _, _, _, _, _, _, l],  # [w   w       w       w w]
+            [l, _, _, l, G, l, _, _, _, _, _, l],  # [w   w       w       w w]
             [l, _, _, _, l, _, _, _, l, _, _, l],  # [w       w       w     w]
             [l, _, l, _, _, _, l, _, _, _, l, l],  # [w   w       w       w w]
             [l, _, _, _, l, _, _, _, l, _, _, l],  # [w       w       w     w]
             [l, _, l, _, _, _, l, _, _, _, l, l],  # [w   w       w       w w]
-            [l, _, _, _, l, _, _, _, l, _, _, l],  # [w       w       w     w]
+            [l, _, G, _, l, _, _, _, l, _, _, l],  # [w       w       w     w]
             [l, _, l, _, _, _, l, _, _, _, l, l],  # [w   w       w       w w]
             [l, _, _, _, l, _, _, _, l, _, _, l],  # [w       w       w     w]
             [l, _, l, _, _, _, l, _, _, _, G, l],  # [w   w       w       w w]

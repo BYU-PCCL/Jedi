@@ -107,6 +107,7 @@ class Monitor:
                   "lr: {:<11.7f} " \
                   "eps: {:<9.5} " \
                   "loss: {:<10.6f}  " \
+                  "frames: {}  " \
                   "actions: {}".format(self.environment.get_episodes(),
                                        float(stats['max_q']),
                                        float(stats['max_std']),
@@ -115,6 +116,7 @@ class Monitor:
                                        float(self.network.learning_rate),
                                        float(self.agent.epsilon),
                                        float(self.network.batch_loss),
+                                       self.environment.frames,
                                        np.array_str(actions, precision=2))
         else:
             log = "| q: {:<7.4f}" \
@@ -135,10 +137,9 @@ class Monitor:
         self.iterations += 1
 
         if self.args.vis:
-            state = np.array(state, dtype=np.float32)
-            state += np.min(state)
-            state /= np.max(state)
-            cv2.imshow("preview", state)
+            vis = self.environment.get_maze_without_agent()
+            vis[self.environment.position[0], self.environment.position[1]] = self.environment.States.user
+            cv2.imshow("preview", vis)
 
         for stats in [self.console_stats, self.episode_stats, self.eval_stats]:
             if stats is not None:
