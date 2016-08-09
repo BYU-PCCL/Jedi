@@ -3,6 +3,7 @@ import random
 import numpy as np
 from memory import Memory
 import sys
+import scipy.sparse.linalg as scipy
 
 if sys.version[0] == '2':
     import Queue as Queue
@@ -208,8 +209,9 @@ class ExperienceAsAModel(Agent):
 
         self.action_probabilities = np.zeros(args.replay_memory_size, dtype=np.float32)
         self.state_probabilities = np.zeros(args.replay_memory_size, dtype=np.float32)
-        # self.state_histogram = np.ones(np.prod(environment.get_state_space()), dtype=np.float32)
         self.last_action_probability = 0
+
+        self.connectivity_matrix = self.environment.get_connectivity_matrix()
 
     def get_action(self, state, is_evaluate):
 
@@ -230,33 +232,36 @@ class ExperienceAsAModel(Agent):
 
         # MUST be done before self.memory.add
         self.action_probabilities[self.memory.current] = self.last_action_probability
-
-        # if self.memory.count > self.args.replay_memory_size:
-        #     self.state_histogram -= self.memory.screens[self.memory.current, 0]
-
-        # self.state_histogram += state[0]
-        self.state_probabilities[self.memory.current] = self.distribution_state(state)
+        self.state_probabilities[self.memory.current] = 1  # self.state_distribution_given_policy()[state.argmax()]
 
         return Agent.after_action(self, state, reward, action, terminal, is_evaluate)
 
-    # def distribution_state(self, states):
-    #     histogram = self.state_histogram / (self.memory.count + self.memory.screens.shape[-1] + 1)
-    #     positions = states.argmax(3)[:, 0, 0] if len(states.shape) > 2 else states.argmax(1)
-    #
-    #     return histogram[positions]
-
-    def distribution_state(self, states):
-        stationary_states = self.stationary_state()
-
-    def stationary_state(self):
+    def state_distribution_given_policy(self):
         states = np.expand_dims(np.eye(144), 1)
         states = np.expand_dims(states, 1)
         actions, qs, _ = self.network.q(states=states)
 
-        state_primes = np.array([self.environment.transition(s, actions[i]) for i, s in enumerate(states)])
+        states = np.linspace(0, 144, num=144, endpoint=False, dtype=np.int64)
 
-        print state_primes.shape
-        quit()
+        epsilon = self.args.exploration_epsilon_evaluation
+        matrix = self.connectivity_matrix * (epsilon / self.environment.get_num_actions())
+
+        for i, s in enumerate(states):
+            if self.environment.get_object_at_state(s) != self.environment.Objects.wall:
+                matrix[s, self.environment.transition_indexed(s, actions[i])] += (1 - epsilon)
+
+        agent_states = matrix.sum(0) > 0
+        matrix = matrix[agent_states][:, agent_states]
+
+        # initial_vector = np.random.random(matrix.shape[0])
+        # initial_vector /= initial_vector.sum()
+        # w, v = scipy.eigs(matrix.T)
+        #
+        # distribution = v[:, 0].real
+        # distribution -= distribution.min()
+        # distribution /= distribution.sum()
+
+        return [1] * 144
 
     def distribution_action_given_state(self, is_on_policy, states):
         # p(a | s ; current_policy)
@@ -281,13 +286,13 @@ class ExperienceAsAModel(Agent):
             on_policy_mask = actions == policy_actions
 
             current_policy_action_probabilities = self.distribution_action_given_state(on_policy_mask, states)
-            current_policy_state_probabilities = self.distribution_state(states)
+            # current_policy_state_probabilities = self.distribution_state(states)
 
             batch_size = states.shape[0]
             weights = np.ones(batch_size) / batch_size
 
             weights *= np.nan_to_num(current_policy_action_probabilities / old_policy_action_probabilites)
-            weights *= np.nan_to_num(current_policy_state_probabilities / old_policy_state_probabilites)
+            # weights *= np.nan_to_num(current_policy_state_probabilities / old_policy_state_probabilites)
 
             weights = np.clip(weights, 0, 10)
 

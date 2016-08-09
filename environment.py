@@ -222,7 +222,7 @@ class MazeEnvironment:
         return 4
 
     def get_state_space(self):
-        return self.get_state().shape
+        return self.get_state(self.position).shape
 
     def act(self, action):
         self.frames += 1
@@ -245,7 +245,18 @@ class MazeEnvironment:
 
         return self.get_state(self.position), reward, self.get_terminal()
 
-    def transition(self, state, action):
+    def get_connectivity_matrix(self):
+        matrix = np.zeros((144, 144), dtype=np.float64)
+
+        for s in range(144):
+            if self.get_object_at_state(s) != self.Objects.wall:
+                for a in range(self.get_num_actions()):
+                    s_prime = self.transition_indexed(s, a)
+                    matrix[s, s_prime] += 1
+
+        return matrix
+
+    def transition_indexed(self, state_index, action):
         delta_position = np.array({
               0: (-1, 0),  # Down
               1: (1, 0),  # Up
@@ -253,19 +264,23 @@ class MazeEnvironment:
               3: (0, -1)  # Left
           }[action])
 
-        position = np.unravel_index(state, self.maze.shape)
+        position = np.array(np.unravel_index(state_index, self.maze.shape))
         proposed_position = position + delta_position
 
         if self.get_maze_position(proposed_position) != self.Objects.wall:
-            return self.get_state(proposed_position)
+            position = proposed_position
 
-        return state
+        return np.ravel_multi_index(position, self.maze.shape)
+
+    def get_object_at_state(self, state):
+        position = np.unravel_index(state, self.maze.shape)
+        return self.get_maze_position(position)
 
     def get_maze_position(self, position):
         x, y = position
         max_x, max_y = self.maze.shape
 
-        return self.maze[np.clip(x, 0, max_x), np.clip(y, 0, max_y)]
+        return self.maze[np.clip(x, 0, max_x - 1), np.clip(y, 0, max_y - 1)]
 
     def get_episodes(self):
         return self.episodes
@@ -278,7 +293,10 @@ class MazeEnvironment:
         state = np.array(self.maze == self.Objects.wall, dtype=np.uint8) * self.States.wall
         return state + goals
 
-    def get_state(self, position):
+    def get_state(self, position=None):
+        if position is None:
+            position = self.position
+
         state = np.zeros(np.prod(self.maze.shape))
         state[np.ravel_multi_index(position, self.maze.shape)] = 1
         return np.atleast_2d(state)

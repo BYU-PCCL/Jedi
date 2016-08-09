@@ -132,11 +132,10 @@ class Network(object):
 
     class Inputs:
         def __getattr__(self, item):
-            # TODO : PLEASE. PLEASE. Remove the tf.transpose as soon as the gpu stuff on the supercomputer is fixed
             processed = {'actions': self.actions_placeholder,
                          'rewards': op.optional_clip(self.rewards_placeholder, -1, 1, self.args.clip_reward),
-                         'states': tf.transpose(op.environment_scale(self.states_placeholder, self.environment), [0, 2, 3, 1]),
-                         'next_states': tf.transpose(op.environment_scale(self.next_states_placeholder, self.environment), [0, 2, 3, 1]),
+                         'states': op.environment_scale(self.states_placeholder, self.environment),
+                         'next_states': op.environment_scale(self.next_states_placeholder, self.environment),
                          'terminals': self.terminals_placeholder}
 
             processed.update(self.preprocessing())

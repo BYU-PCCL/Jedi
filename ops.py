@@ -100,12 +100,12 @@ def conv2d(source, size, filters, stride, padding='SAME', stddev=0.02, initializ
     activation_fn = _parse_activation(activation_fn)
 
     with tf.variable_scope(name + '_conv2d'):
-        # TODO : go back to NCHW mode when the GPU
-        w = tf.reshape(tf.get_variable("weight", shape=[size * size * shape[3] * filters], initializer=initializer, dtype=tf.float32), [size, size, shape[3], filters])
+        w = tf.reshape(tf.get_variable("weight", shape=[size * size * shape[1] * filters], initializer=initializer,
+                                       dtype=tf.float32), [size, size, shape[1], filters])
         b = tf.get_variable("bias", [filters], initializer=tf.constant_initializer(bias_start))
 
-        c = tf.nn.conv2d(source, w, strides=[1, stride, stride, 1], padding=padding)
-        out = tf.nn.bias_add(c, b)
+        c = tf.nn.conv2d(source, w, strides=[1, 1, stride, stride], padding=padding, data_format='NCHW')
+        out = tf.nn.bias_add(c, b, data_format='NCHW')
         activated = activation_fn(out) if activation_fn is not None else out
 
         return activated, w, b
