@@ -243,7 +243,23 @@ class MazeEnvironment:
 
         self.score += reward
 
-        return self.get_state(), reward, self.get_terminal()
+        return self.get_state(self.position), reward, self.get_terminal()
+
+    def transition(self, state, action):
+        delta_position = np.array({
+              0: (-1, 0),  # Down
+              1: (1, 0),  # Up
+              2: (0, 1),  # Right
+              3: (0, -1)  # Left
+          }[action])
+
+        position = np.unravel_index(state, self.maze.shape)
+        proposed_position = position + delta_position
+
+        if self.get_maze_position(proposed_position) != self.Objects.wall:
+            return self.get_state(proposed_position)
+
+        return state
 
     def get_maze_position(self, position):
         x, y = position
@@ -262,9 +278,9 @@ class MazeEnvironment:
         state = np.array(self.maze == self.Objects.wall, dtype=np.uint8) * self.States.wall
         return state + goals
 
-    def get_state(self):
+    def get_state(self, position):
         state = np.zeros(np.prod(self.maze.shape))
-        state[np.ravel_multi_index(self.position, self.maze.shape)] = 1
+        state[np.ravel_multi_index(position, self.maze.shape)] = 1
         return np.atleast_2d(state)
 
     def max_state_value(self):

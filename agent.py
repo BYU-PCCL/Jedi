@@ -208,7 +208,7 @@ class ExperienceAsAModel(Agent):
 
         self.action_probabilities = np.zeros(args.replay_memory_size, dtype=np.float32)
         self.state_probabilities = np.zeros(args.replay_memory_size, dtype=np.float32)
-        self.state_histogram = np.ones(np.prod(environment.get_state_space()), dtype=np.float32)
+        # self.state_histogram = np.ones(np.prod(environment.get_state_space()), dtype=np.float32)
         self.last_action_probability = 0
 
     def get_action(self, state, is_evaluate):
@@ -231,19 +231,32 @@ class ExperienceAsAModel(Agent):
         # MUST be done before self.memory.add
         self.action_probabilities[self.memory.current] = self.last_action_probability
 
-        if self.memory.count > self.args.replay_memory_size:
-            self.state_histogram -= self.memory.screens[self.memory.current, 0]
+        # if self.memory.count > self.args.replay_memory_size:
+        #     self.state_histogram -= self.memory.screens[self.memory.current, 0]
 
-        self.state_histogram += state[0]
+        # self.state_histogram += state[0]
         self.state_probabilities[self.memory.current] = self.distribution_state(state)
 
         return Agent.after_action(self, state, reward, action, terminal, is_evaluate)
 
-    def distribution_state(self, states):
-        histogram = self.state_histogram / (self.memory.count + self.memory.screens.shape[-1] + 1)
-        positions = states.argmax(3)[:, 0, 0] if len(states.shape) > 2 else states.argmax(1)
+    # def distribution_state(self, states):
+    #     histogram = self.state_histogram / (self.memory.count + self.memory.screens.shape[-1] + 1)
+    #     positions = states.argmax(3)[:, 0, 0] if len(states.shape) > 2 else states.argmax(1)
+    #
+    #     return histogram[positions]
 
-        return histogram[positions]
+    def distribution_state(self, states):
+        stationary_states = self.stationary_state()
+
+    def stationary_state(self):
+        states = np.expand_dims(np.eye(144), 1)
+        states = np.expand_dims(states, 1)
+        actions, qs, _ = self.network.q(states=states)
+
+        state_primes = np.array([self.environment.transition(s, actions[i]) for i, s in enumerate(states)])
+
+        print state_primes.shape
+        quit()
 
     def distribution_action_given_state(self, is_on_policy, states):
         # p(a | s ; current_policy)
