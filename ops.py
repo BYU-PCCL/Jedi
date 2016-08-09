@@ -82,10 +82,11 @@ def linear(source, output_size, stddev=0.02, initializer='truncated-normal', bia
     activation_fn = _parse_activation(activation_fn)
 
     with tf.variable_scope(name + '_linear'):
-        w = tf.reshape(tf.get_variable("weight", [shape[1] * output_size], _context['floatx'], initializer), [shape[1], output_size])
-        b = tf.get_variable("bias", [output_size], dtype=_context['floatx'], initializer=tf.constant_initializer(bias_start))
+        # Emperically, I have tried using _context['floatx'] to define the type here for w and b, and it does badly
+        w = tf.reshape(tf.get_variable("weight", [shape[1] * output_size], tf.float32, initializer), [shape[1], output_size])
+        b = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(bias_start))
 
-        out = tf.nn.bias_add(tf.matmul(tofloat(source), w), b)
+        out = tf.nn.bias_add(tf.matmul(source, w), b)
 
         if activation_fn is not None:
             out = activation_fn(out)
