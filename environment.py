@@ -3,6 +3,7 @@ import numpy as np
 import gym
 import tensorflow as tf
 from enum import Enum
+import cv2
 
 class ArrayEnvironment:
     def __init__(self, args):
@@ -135,8 +136,10 @@ class AtariEnvironment:
 
         self.terminal = self.terminal or self.frames >= self.args.max_frames_per_episode
 
-        with self.sess.as_default():
-            frame = self.resize_op.eval(feed_dict={self.resize_input: [screen]})[0, :, :, 0]
+        # with self.sess.as_default():
+        #     frame = self.resize_op.eval(feed_dict={self.resize_input: [screen]})[0, :, :, 0]
+
+        frame = cv2.resize(screen, (self.args.resize_width, self.args.resize_height))
 
         if self.lives > self.env.ale.lives() and self.args.negative_reward_on_death:
             total_reward -= 10
