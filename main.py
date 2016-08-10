@@ -60,9 +60,7 @@ bar_format = '{percentage:3.0f}% | {n_fmt} {elapsed} {rate_fmt}'
 if args.verbose:
     bar_format = '{percentage:3.0f}% | {bar} | {n_fmt} [{elapsed}, {rate_fmt}]'
 
-for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothing=.001,
-                 bar_format=bar_format):
-
+for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothing=.01, bar_format=bar_format):
     # Determine if we should evaluate this episode or not
     is_evaluate = is_evaluate or ((tick + 1) % args.evaluate_frequency) == 0
     is_evaluate = is_evaluate and tick > args.iterations_before_training

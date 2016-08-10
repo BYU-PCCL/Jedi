@@ -100,10 +100,12 @@ class DQN(object):
             self.sess.run(self.assign_ops)
 
     def build_feed_dict(self, **kwargs):
-        # Print a notice to the user if they are passing in unknown variables
         ignored = [key for key in kwargs.keys() if key + '_placeholder' not in self.inputs.__dict__.keys()]
-        assert len(ignored) == 0, 'The following arguments passed to train() are not used by this network : ' + str(ignored)
-        return {getattr(self.inputs, key + '_placeholder'): var for (key, var) in kwargs.items()}
+
+        # Optional print a notice to the user if they are passing in unknown variables
+        # assert len(ignored) == 0, 'The following arguments passed to train() are not used by this network : ' + str(ignored)
+
+        return {getattr(self.inputs, key + '_placeholder'): var for (key, var) in kwargs.items() if key not in ignored}
 
     def train(self, **kwargs):
         data = self.build_feed_dict(**kwargs)
@@ -496,4 +498,5 @@ class WeightedLinear(Linear):
 
     def loss(self, truth, prediction):
         delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
-        return tf.reduce_sum(op.tofloat(self.inputs.weights_placeholder) * tf.square(delta, name='square'), name='loss')
+        weights = op.optional_clip(self.inputs.weights_placeholder, 0, 10, True)
+        return tf.reduce_mean(weights * tf.square(delta, name='square'), name='loss')

@@ -137,9 +137,7 @@ class Monitor:
         self.iterations += 1
 
         if self.args.vis:
-            vis = self.environment.get_maze_without_agent()
-            vis[self.environment.position[0], self.environment.position[1]] = self.environment.States.user
-            cv2.imshow("preview", vis)
+            cv2.imshow("preview", self.environment.render())
 
         for stats in [self.console_stats, self.episode_stats, self.eval_stats]:
             if stats is not None:

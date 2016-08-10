@@ -2,6 +2,8 @@ import tensorflow as tf
 import contextlib
 import copy
 from functools import reduce
+import collections
+import functools
 
 _context = {'floatx': tf.float32,
             'default_activation_fn': 'none'}
@@ -127,8 +129,9 @@ def tofloat(source, safe=True):
     return tf.cast(source, _context['floatx'])
 
 
-def float(shape, name='int', bits=32):
-    return tf.placeholder('float' + str(bits), shape, name=name)
+def float(shape, name='int', bits=None):
+    type = 'float' + str(bits) if bits is not None else _context['floatx']
+    return tf.placeholder(type, shape, name=name)
 
 
 def int(shape, name='int', bits=8, unsigned=False):

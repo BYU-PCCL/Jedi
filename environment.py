@@ -4,6 +4,9 @@ import gym
 import tensorflow as tf
 from enum import Enum
 import cv2
+import ops
+from fastcache import clru_cache
+
 
 class ArrayEnvironment:
     def __init__(self, args):
@@ -139,6 +142,9 @@ class AtariEnvironment:
         # with self.sess.as_default():
         #     frame = self.resize_op.eval(feed_dict={self.resize_input: [screen]})[0, :, :, 0]
 
+        # OpenCV is much faster than tensorflow, but during training the speed advantage is washed out
+        # by how slow the network is to train. Therefore the difference in speed by using opencv is only
+        # useful during the iterations_before_training
         frame = cv2.resize(screen, (self.args.resize_width, self.args.resize_height))
 
         if self.lives > self.env.ale.lives() and self.args.negative_reward_on_death:
@@ -200,7 +206,7 @@ class MazeEnvironment:
         coin = 7
         goal = 10
 
-    class States(Enum):
+    class PixelValues(Enum):
         user = 75
         wall = 125
         open = 0
@@ -219,10 +225,17 @@ class MazeEnvironment:
             self.Objects.open: 0.0
         }
 
+        self.actions = {
+            0: (-1, 0),  # Down
+            1: (1, 0),   # Up
+            2: (0, 1),   # Right
+            3: (0, -1)   # Left
+        }
+
         self.reset()
 
     def get_num_actions(self):
-        return 4
+        return len(self.actions)
 
     def get_state_space(self):
         return self.get_state(self.position).shape
@@ -230,18 +243,12 @@ class MazeEnvironment:
     def act(self, action):
         self.frames += 1
 
-        delta_position = np.array({
-            0: (-1, 0),  # Down
-            1: (1, 0),   # Up
-            2: (0, 1),   # Right
-            3: (0, -1)   # Left
-        }[action])
-
+        delta_position = np.array(self.actions[action])
         proposed_position = self.position + delta_position
 
-        reward = self.rewards[self.get_maze_position(proposed_position)]
+        reward = self.rewards[self.get_object_at_position(proposed_position)]
 
-        if self.get_maze_position(proposed_position) != self.Objects.wall:
+        if self.get_object_at_position(proposed_position) != self.Objects.wall:
             self.position = proposed_position
 
         self.score += reward
@@ -252,34 +259,30 @@ class MazeEnvironment:
         matrix = np.zeros((144, 144), dtype=np.float64)
 
         for s in range(144):
-            if self.get_object_at_state(s) != self.Objects.wall:
+            if self.get_object_at_index(s) != self.Objects.wall:
                 for a in range(self.get_num_actions()):
                     s_prime = self.transition_indexed(s, a)
                     matrix[s, s_prime] += 1
 
         return matrix
 
+    @clru_cache(maxsize=1000, typed=False)
     def transition_indexed(self, state_index, action):
-        delta_position = np.array({
-              0: (-1, 0),  # Down
-              1: (1, 0),  # Up
-              2: (0, 1),  # Right
-              3: (0, -1)  # Left
-          }[action])
+        delta_position = np.array(self.actions[action])
 
         position = np.array(np.unravel_index(state_index, self.maze.shape))
         proposed_position = position + delta_position
 
-        if self.get_maze_position(proposed_position) != self.Objects.wall:
+        if self.get_object_at_position(proposed_position) != self.Objects.wall:
             position = proposed_position
 
         return np.ravel_multi_index(position, self.maze.shape)
 
-    def get_object_at_state(self, state):
+    def get_object_at_index(self, state):
         position = np.unravel_index(state, self.maze.shape)
-        return self.get_maze_position(position)
+        return self.get_object_at_position(position)
 
-    def get_maze_position(self, position):
+    def get_object_at_position(self, position):
         x, y = position
         max_x, max_y = self.maze.shape
 
@@ -291,43 +294,52 @@ class MazeEnvironment:
     def get_score(self):
         return self.score
 
-    def get_maze_without_agent(self):
-        goals = np.array(self.maze == self.Objects.goal, dtype=np.uint8) * self.States.goal
-        state = np.array(self.maze == self.Objects.wall, dtype=np.uint8) * self.States.wall
-        return state + goals
-
     def get_state(self, position=None):
         if position is None:
             position = self.position
 
-        state = np.zeros(np.prod(self.maze.shape))
-        state[np.ravel_multi_index(position, self.maze.shape)] = 1
-        return np.atleast_2d(state)
+        state = np.zeros([1, np.prod(self.maze.shape)])
+        state[0, np.ravel_multi_index(position, self.maze.shape)] = 1
+        return state
 
     def max_state_value(self):
         return 1
 
     def get_terminal(self):
-        self.terminal = self.terminal or ((self.get_maze_position(self.position) == self.Objects.goal) or self.frames >= self.args.max_frames_per_episode)
+        self.terminal = self.terminal or ((self.get_object_at_position(self.position) == self.Objects.goal) or self.frames >= self.args.max_frames_per_episode)
         return self.terminal
+
+    def render(self):
+        goals = np.array(self.maze == self.Objects.goal, dtype=np.uint8) * self.PixelValues.goal
+        state = np.array(self.maze == self.Objects.wall, dtype=np.uint8) * self.PixelValues.wall
+        state = state + goals
+        state[self.position[0], self.position[1]] = self.PixelValues.user
+
+        return state
 
     def _build_maze(self):
         l, _, G = self.Objects.wall, self.Objects.open, self.Objects.goal
         start = np.array([1, 1])
         return np.array([
             [l, l, l, l, l, l, l, l, l, l, l, l],  # [w w w w w w w w w w w w]
-            [l, _, _, _, _, _, _, _, _, _, G, l],  # [w       w       w     w]
-            [l, _, _, l, G, l, _, _, _, _, _, l],  # [w   w       w       w w]
+            [l, _, _, _, _, _, _, _, _, _, G, l],  # [w                   G w]
+            [l, _, _, l, G, l, _, _, _, _, _, l],  # [w     w G w           w]
+            [l, _, _, _, l, _, _, _, l, _, _, l],  # [w       w       w     w]
+            [l, _, _, _, _, _, l, _, _, _, l, l],  # [w           w       w w]
             [l, _, _, _, l, _, _, _, l, _, _, l],  # [w       w       w     w]
             [l, _, l, _, _, _, l, _, _, _, l, l],  # [w   w       w       w w]
-            [l, _, _, _, l, _, _, _, l, _, _, l],  # [w       w       w     w]
-            [l, _, l, _, _, _, l, _, _, _, l, l],  # [w   w       w       w w]
-            [l, _, G, _, l, _, _, _, l, _, _, l],  # [w       w       w     w]
+            [l, _, G, _, l, _, _, _, l, _, _, l],  # [w   G   w       w     w]
             [l, _, l, _, _, _, l, _, _, _, l, l],  # [w   w       w       w w]
             [l, _, _, _, l, _, _, _, l, _, _, l],  # [w       w       w     w]
-            [l, _, l, _, _, _, l, _, _, _, G, l],  # [w   w       w       w w]
+            [l, _, l, _, _, _, l, _, _, _, G, l],  # [w   w       w       G w]
             [l, l, l, l, l, l, l, l, l, l, l, l]   # [w w w w w w w w w w w w]
         ]), start
+
+    def generate_test(self):
+        eye = np.eye(144)
+        states = [eye[x] for x in range(144) if self.get_object_at_index(x) != self.Objects.wall]
+        states = np.expand_dims(np.expand_dims(states, 1), 1)
+        return states
 
     def reset(self):
         self.episodes += 1
