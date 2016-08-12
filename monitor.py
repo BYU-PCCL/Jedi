@@ -1,7 +1,6 @@
 from __future__ import print_function
 import numpy as np
 from colorama import Fore, Style
-import cv2
 
 class Stats:
     def __init__(self):
@@ -42,16 +41,14 @@ class Monitor:
         self.episode_stats = Stats()
         self.commit_ready = False
 
+        self.cv2 = None
+
         if not self.args.bypass_sql:
             import sqlite3
             self.conn = sqlite3.connect(args.sql_db_file)
             self.cursor = self.conn.cursor()
 
         self.save_config(args)
-
-        if self.args.vis:
-            cv2.startWindowThread()
-            cv2.namedWindow("preview", cv2.WINDOW_NORMAL)
 
         print("\n\nInitialized")
         print("{0:>20} : {1:,} ".format("Network Parameters", self.network.total_parameters()))
@@ -112,7 +109,7 @@ class Monitor:
                                        self.environment.frames,
                                        np.array_str(actions, precision=2))
         else:
-            log = "| q: {:<7.4f}" \
+            log = " | q: {:<7.4f}" \
                   "s:{:>2g},{:<2g}".format(
                                        float(stats['max_q']),
                                        stats['min_score'],
@@ -124,13 +121,25 @@ class Monitor:
             print(Fore.GREEN, log, Style.RESET_ALL)
 
         else:
-            print(" " + log, end="\r")
+            print(log, end="\r")
+
+    def start_visualizer(self):
+        if self.args.vis:
+            import cv2
+            self.cv2 = cv2
+            cv2.startWindowThread()
+            cv2.namedWindow("preview", cv2.WINDOW_NORMAL)
+
+    def end_visualizer(self):
+        self.cv2.destroyAllWindows()
 
     def monitor(self, state, reward, terminal, q_values, action, is_evaluate):
         self.iterations += 1
 
-        if self.args.vis:
-            cv2.imshow("preview", self.environment.render())
+        if self.cv2 is not None and self.args.vis:
+            pixels = self.environment.render()
+            if pixels is not None:
+                self.cv2.imshow("preview", pixels)
 
         for stats in [self.console_stats, self.episode_stats, self.eval_stats]:
             if stats is not None:

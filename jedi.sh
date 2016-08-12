@@ -1,18 +1,37 @@
 # vim: filetype=sh
 
-function help {
+function explain_usage {
     echo "Usage: jedi.sh    {run_all | run_local | dashboard | use_fsl} [options]"
-    echo "               [--fsl_sbatch_arguments]  # Passed into the sbatch options (gpu, mem, nodes, name, etc.) when using FSL"
-    echo "               [--fsl_python_arguments]  # Passed into the `python main [args] --rom="blah"` call when using FSL"
-    echo "               [--fsl_username]          # username used when ssh-ing into the FSL"
+    echo "  for more information, use jedi.sh --help"   
 }
 
 function explain_dashboard {
+    echo ".jedi.sh dashboard"
+    echo ""
     echo "If you are using 'jedi dashboard', you can add a command line parameter in"
     echo "   quotes (\"[cmd]\") that will be send to each screen to be run there."
     echo ""
     echo "           Example: jedi dashboard \"top\""
+    echo "           Example: jedi dashboard \"cd /mnt/pccfs/projects/jedi && top\""
     echo ""
+}
+function explain_runall {
+    echo ".jedi.sh run_all"
+    echo ""
+    echo "Run all will run commands on the PCCS's local Lab Machines."
+    echo "  These commands will be run in a screen environment."
+    echo "  Screen allows users to keep sessions alive after disconnectiong from the terminal"
+    echo "      to detach:                 Ctrl-a Ctrl-c"
+    echo "      to reconnect:              screen -r"
+    echo "      to quit on all computers:  Ctrl-a ':quit'"
+    echo "  (internally, this will ssh and executes 'jedi run_local' on each computer)"
+    echo ""
+    echo "            Example: jedi run_all"
+    echo ""
+}
+function explain_runfsl {
+    echo ""
+    echo "            Example: jedi run_fsl --fsl_sbatch_arguments=\"stuff\" --fsl_python_arguments=\"stuff\" "
 }
 
 
@@ -34,7 +53,7 @@ function gen_fsl_sbatch_script {
         echo "[--nGPU|--gpus]          Default: 10"
         echo "[--mem|--total_memory]   Default: 12"
         echo "[--mem_unit]             Default: G (M is also allowed)"
-        echo "[-job|--jobname]         Default: 'genscript-example'"
+        echo "[--jobname]         Default: 'genscript-example'"
         echo ""
         echo "Example: --gpus=2 -job=testing -wt=01:00:00 -n=1 --mem=24 --mem_unit=G"
     }
@@ -72,7 +91,7 @@ function gen_fsl_sbatch_script {
         --mem_unit=G)  mem_unit="G";  shift ;;
         --mem_unit=M)  mem_unit="M";  shift ;;
         
-        -n=*|--jobname=*) jobname=${i#*=}; shift ;;
+        --jobname=*) jobname=${i#*=}; shift ;;
             
         *) "Gen SBATCH Function: Error: unrecognized flags."; sbatch_help; echo "BAD_VALUE_WAS: >>>$i<<<"; exit 6 ;;
       esac
@@ -108,8 +127,8 @@ function gen_fsl_sbatch_script {
 ###############################################################################
 
 #Defaults for named params:
-FSL_SBATCH_ARGS="--nodes=1"
-FSL_PY_ARGS="--bypass_sql --threads=12"
+# FSL_SBATCH_ARGS="--nodes=1"
+# FSL_PY_ARGS="--bypass_sql --threads=12"
 FSL_USERNAME="jacobj66"
 
 ###############################################################################
@@ -118,10 +137,7 @@ FSL_USERNAME="jacobj66"
 ###############################################################################
 if [ "$1" = dashboard ]; then
 
-    if [ "$2" = "" ]; then
-        explain_dashboard;
-    fi
-    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc -c \"$2\" ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc"
+    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc -c \"${@:2}\" ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc"
     screen -c ./.screenrc
 
 ###############################################################################
@@ -134,6 +150,7 @@ elif [ "$1" = run_all ]; then
 
 elif [ "$1" = run_local ]; then
 
+    # Prints out the hostname variable of the remote machines
     echo "$(tput setaf 1)#####"
     echo "$HOSTNAME"
     echo "#####$(tput sgr0)"
@@ -232,37 +249,34 @@ elif [ "$1" = run_local ]; then
 ###############################################################################
 
 elif [ "$1" = run_fsl ]; then
-    # echo "i.e:  `./jedi.sh run_fsl_local --fsl_sbatch_arguments=\"stuff\" --fsl_python_arguments=\"stuff\"`"
-
-    FSL_RUN_ALL_ROMS=false
+    shift ;
+    echo $@
+    FSL_RUN_ALL_ROMS=""
     for i in "$@"
     do
         case $i in
-            --fsl_sbatch_arguments=*) FSL_SBATCH_ARGS="${i#*=}";  shift ;;
-            --fsl_python_arguments=*) FSL_PY_ARGS="${i#*=}";  shift ;;
-            --fsl_username=*) FSL_USERNAME="${i#*=}";  shift ;;
-            --run_all_roms)           FSL_RUN_ALL_ROMS=true;;
-            *) echo "Error: unrecognized flags: $i";
+            --fsl_sbatch_arguments=*) echo "fsl sbatch  args"; FSL_SBATCH_ARGS="${i#*=}"; shift ;;
+            --fsl_python_arguments=*) echo "fsl main.py args"; FSL_PY_ARGS="${i#*=}";   shift ;;
+            --fsl_username=*)         FSL_USERNAME="${i#*=}"; shift ;;
+            --run_all_roms)           FSL_RUN_ALL_ROMS="--run_all_roms"; shift ;;
         esac
     done
-
+    
+    echo "FSL_SBATCH_ARGS was >>>$FSL_SBATCH_ARGS<<<"
+    echo "FSL_PY_ARGS was     >>>$FSL_PY_ARGS<<<"
+    
     if [ "$FSL_USERNAME" = "" ]; then
         echo "Please provide an fsl username to ssh with"
         exit 4
     fi
-    runallroms=""
-    if [ $FSL_RUN_ALL_ROMS = true ]; then
-        runallroms="--run_all_roms" 
-    fi
-    cmd="cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ && pwd &&  ./jedi.sh run_fsl_local --fsl_sbatch_arguments=\"$FSL_SBATCH_ARGS\" --fsl_python_arguments=\"$FSL_PY_ARGS\" $runallroms"
-    if
-    ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "$cmd"
+
+    ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ && pwd &&  ./jedi.sh run_fsl_local --fsl_sbatch_arguments=\"$FSL_SBATCH_ARGS\" --fsl_python_arguments=\"$FSL_PY_ARGS\" $FSL_RUN_ALL_ROMS"
   
 ###############################################################################
 
 #-DONE- fsl usename needs to be a paramter
 #-DONE- jedi dashboard "command" is not working
-# TODO: add --run_all_roms flag to determine if ROM_LIST is used at all
+#-Prob- add --run_all_roms flag to determine if ROM_LIST is used at all
 # TODO: clean up code (remove all debugging stuff)
 # TODO: improve help for jedi.sh
 
@@ -278,21 +292,29 @@ elif [ "$1" = run_fsl_local ]; then
         esac
     done
 
-    #echo "FSL_SBATCH_ARGS was >>>$FSL_SBATCH_ARGS<<<"
-    #echo "FSL_PY_ARGS was     >>>$FSL_PY_ARGS<<<"
+    echo "FSL_SBATCH_ARGS was >>>$FSL_SBATCH_ARGS<<<"
+    echo "FSL_PY_ARGS was     >>>$FSL_PY_ARGS<<<"
     source $HOME/fsl_groups/fslg_pccl/configs/group_bashrc
     
-    if [ "$FSL_RUN_ALL_ROMS" = true ]
-    ROM_LIST=('Breakout' 'WizardOfWor' 'Robotank' 'Boxing' 'StarGunner' 'Pooyan' 'Seaquest' 'Tennis' 'Enduro' 'Gopher' 'Bowling' 'VideoPinball' 'Qbert' 'MontezumaRevenge' 'Phoenix' 'Krull' 'KungFuMaster' 'Pitfall' 'DoubleDunk' 'FishingDerby' 'Riverraid' 'Carnival' 'UpNDown' 'BattleZone' 'Asteroids' 'Atlantis' 'ChopperCommand' 'Skiing' 'PrivateEye' 'Zaxxon' 'AirRaid' 'Venture' 'YarsRevenge' 'ElevatorAction' 'Frostbite' 'DemonAttack' 'Centipede' 'NameThisGame' 'Gravitar' 'Pong' 'Freeway' 'Asterix' 'Amidar' 'Jamesbond' 'BankHeist' 'Tutankham' 'SpaceInvaders' 'Alien' 'Solaris' 'TimePilot' 'Berzerk' 'JourneyEscape' 'IceHockey' 'Assault' 'RoadRunner' 'BeamRider' 'Kangaroo' 'MsPacman' 'CrazyClimber')
+    if [ "$FSL_RUN_ALL_ROMS" = true ]; then
+        ROM_LIST=('Breakout') # 'WizardOfWor' 'Robotank' 'Boxing' 'StarGunner' 'Pooyan' 'Seaquest' 'Tennis' 'Enduro' 'Gopher' 'Bowling' 'VideoPinball' 'Qbert' 'MontezumaRevenge' 'Phoenix' 'Krull' 'KungFuMaster' 'Pitfall' 'DoubleDunk' 'FishingDerby' 'Riverraid' 'Carnival' 'UpNDown' 'BattleZone' 'Asteroids' 'Atlantis' 'ChopperCommand' 'Skiing' 'PrivateEye' 'Zaxxon' 'AirRaid' 'Venture' 'YarsRevenge' 'ElevatorAction' 'Frostbite' 'DemonAttack' 'Centipede' 'NameThisGame' 'Gravitar' 'Pong' 'Freeway' 'Asterix' 'Amidar' 'Jamesbond' 'BankHeist' 'Tutankham' 'SpaceInvaders' 'Alien' 'Solaris' 'TimePilot' 'Berzerk' 'JourneyEscape' 'IceHockey' 'Assault' 'RoadRunner' 'BeamRider' 'Kangaroo' 'MsPacman' 'CrazyClimber')
 
-    for i in "${!ROM_LIST[@]}"; do
-        romname=${ROM_LIST[$i]}
-        gen_fsl_sbatch_script $FSL_SBATCH_ARGS "--jobname=$romname"
-        echo "python main.py $FSL_PY_ARGS --rom=$romname" >> sbatch.tmp 
-        sbatch sbatch.tmp
-        rm sbatch.tmp
-    done
-  
+        for i in "${!ROM_LIST[@]}"; do
+            romname=${ROM_LIST[$i]}
+            gen_fsl_sbatch_script "--jobname=$romname" $FSL_SBATCH_ARGS 
+            echo "python main.py $FSL_PY_ARGS --rom=$romname" >> sbatch.tmp 
+            sbatch sbatch.tmp
+            rm sbatch.tmp
+        done
+    else
+        gen_fsl_sbatch_script "--jobname=single_command" $FSL_SBATCH_ARGS
+        echo "python main.py $FSL_PY_ARGS"  >> sbatch.tmp
+        # sbatch sbatch.tmp
+        # rm sbatch.tmp
+    fi
+
+################### COPY TO FSL ###############################################
+ # Temp until our old pccgit gitlab server supports ssl/https
 elif [ "$1" = fsl_copy ]; then
 
     if [ "$FSL_USERNAME" = "" ]; then

@@ -29,20 +29,31 @@ is_evaluate = False
 
 # Handle Ctrl + c
 def commander(signal, frame):
-    command = input("\n\n {} Command [args | eval | verbose | quiet | reset-network]: ".format(args.name))
-    if command == "args":
-        for key in sorted(vars(args)):
-            print("{0:>40} : {1}".format(key, getattr(args, key)))
-        input("Press enter to continue.")
-    elif command == "verbose":
-        args.verbose = True
-    elif command == "quiet":
-        args.verbose = False
-    elif command == "reset-network":
-        network.initialize()
-    elif command == "eval":
-        global eval_pending
-        eval_pending = True
+    try:
+        command = raw_input("\n\n {} Command [args | eval | verbose | quiet | reset-network | vis]: ".format(args.name))
+        if command == "args":
+            for key in sorted(vars(args)):
+                print("{0:>40} : {1}".format(key, getattr(args, key)))
+            raw_input("Press enter to continue.")
+        elif command == "verbose":
+            args.verbose = True
+        elif command == "quiet":
+            args.verbose = False
+        elif command == "reset-network":
+            network.initialize()
+        elif command == "vis":
+            if args.vis:
+                args.vis = False
+                monitor.end_visualizer()
+            else:
+                args.vis = parameters.can_vis()
+                monitor.start_visualizer()
+        elif command == "eval":
+            global eval_pending
+            eval_pending = True
+
+    except SyntaxError:
+        return
 
 signal.signal(signal.SIGINT, commander)
 
@@ -60,7 +71,7 @@ bar_format = '{percentage:3.0f}% | {n_fmt} {elapsed} {rate_fmt}'
 if args.verbose:
     bar_format = '{percentage:3.0f}% | {bar} | {n_fmt} [{elapsed}, {rate_fmt}]'
 
-for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0.0001, smoothing=.01, bar_format=bar_format):
+for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0, smoothing=0.01, bar_format=bar_format):
     # Determine if we should evaluate this episode or not
     is_evaluate = is_evaluate or ((tick + 1) % args.evaluate_frequency) == 0
     is_evaluate = is_evaluate and tick > args.iterations_before_training

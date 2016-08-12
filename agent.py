@@ -3,9 +3,7 @@ import random
 import numpy as np
 from memory import Memory
 import sys
-import scipy.io as io
 import tensorflow as tf
-import cv2
 import time
 
 if sys.version[0] == '2':
@@ -205,6 +203,15 @@ class DensityExplorer(Agent):
         else:
             return action[0], qs[0]
 
+class ContinuousAction(Agent):
+    def __init__(self, args, environment, network):
+        assert len(environment.get_action_space()) > 0
+        Agent.__init__(self, args, environment, network)
+
+    def get_action(self, state, is_evaluate):
+        action, q, additional_ops = self.network.q(states=[self.phi])
+
+        return action[0], q[0]
 
 class ExperienceAsAModel(Agent):
     def __init__(self, args, environment, network):

@@ -3,10 +3,9 @@ import numpy as np
 import gym
 import tensorflow as tf
 from enum import Enum
-import cv2
-import ops
-from fastcache import clru_cache
+import fastcache
 
+# TODO: create a Environment class that defines some basic stuff shared between environments
 
 class ArrayEnvironment:
     def __init__(self, args):
@@ -97,6 +96,74 @@ class ArrayEnvironment:
         return states, actions, rewards, next_states, terminals
 
 
+class GenericOpenAIGym:
+    def __init__(self, args):
+        self.args = args
+        self.env = gym.make(args.openaigym_environment)
+
+        self.score = 0
+        self.episodes = 0
+        self.terminal = False
+        self.frames = 0
+
+        self.state = None
+
+        self.reset()
+
+    def get_num_actions(self):
+        try:
+            return self.env.action_space.n
+        except AttributeError:
+            return np.prod(self.env.action_space.shape)
+
+    def get_action_space(self):
+        try:
+            return self.env.action_space.shape
+        except AttributeError:
+            return tuple()
+
+    def get_state_space(self):
+        return self.env.observation_space.shape
+
+    def render(self):
+        self.env.render(close=not self.args.vis)
+
+        return None
+
+    def act(self, action):
+        self.frames += 1
+        self.state, reward, self.terminal, _ = self.env.step(action)
+        self.score += reward
+
+        return self.get_state(), reward, self.terminal
+
+    def get_episodes(self):
+        return self.episodes
+
+    def get_score(self):
+        return self.score
+
+    def get_state(self):
+        return self.state
+
+    def max_state_value(self):
+        return np.max(self.env.observation_space.high)
+
+    def min_state_value(self):
+        return np.min(self.env.observation_space.low)
+
+    def reset(self):
+        self.episodes += 1
+        self.frames = 0
+        self.env.reset()
+
+        self.terminal = False
+        self.score = 0
+
+    def generate_test(self):
+        return None
+
+
 class AtariEnvironment:
     def __init__(self, args):
         self.args = args
@@ -111,15 +178,25 @@ class AtariEnvironment:
         self.buffer = np.zeros((args.buffer_size, args.resize_height, args.resize_width), dtype=np.uint8)
 
         height, width, channels = self.env.observation_space.shape
-        self.resize_input = tf.placeholder(np.uint8, shape=[None, height, width, channels])
-        self.resize_op = tf.image.resize_bilinear(self.resize_input, [args.resize_height, args.resize_width])
 
-        tf.set_random_seed(args.random_seed)
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_fraction,
-                                    allow_growth=True)
-        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options,
-                                                     allow_soft_placement=True,
-                                                     log_device_placement=self.args.verbose))
+        try:
+            import cv2
+            self.cv2 = cv2
+            self.resize_method = 'cv2'
+
+        except ImportError:
+            self.resize_method = 'tensorflow'
+            self.resize_input = tf.placeholder(np.uint8, shape=[None, height, width, channels])
+            self.resize_op = tf.image.resize_bilinear(self.resize_input, [args.resize_height, args.resize_width])
+
+            tf.set_random_seed(args.random_seed)
+            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_fraction,
+                                        allow_growth=True)
+            self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options,
+                                                         allow_soft_placement=True,
+                                                         log_device_placement=self.args.verbose))
+
+
 
         self.reset()
 
@@ -131,6 +208,9 @@ class AtariEnvironment:
 
     def get_action_space(self):
         return tuple()  # No dimension
+
+    def render(self):
+        return self.state
 
     def act(self, action):
         total_reward = 0
@@ -145,13 +225,14 @@ class AtariEnvironment:
 
         self.terminal = self.terminal or self.frames >= self.args.max_frames_per_episode
 
-        # with self.sess.as_default():
-        #     frame = self.resize_op.eval(feed_dict={self.resize_input: [screen]})[0, :, :, 0]
-
-        # OpenCV is much faster than tensorflow, but during training the speed advantage is washed out
-        # by how slow the network is to train. Therefore the difference in speed by using opencv is only
-        # useful during the iterations_before_training
-        frame = cv2.resize(screen, (self.args.resize_width, self.args.resize_height))
+        if self.resize_method == 'tensorflow':
+            with self.sess.as_default():
+                frame = self.resize_op.eval(feed_dict={self.resize_input: [screen]})[0, :, :, 0]
+        elif self.resize_method == 'cv2':
+            # OpenCV is much faster than tensorflow, but during training the speed advantage is washed out
+            # by how slow the network is to train. Therefore the difference in speed by using opencv is only
+            # useful during the iterations_before_training
+            frame = self.cv2.resize(screen, (self.args.resize_width, self.args.resize_height))
 
         if self.lives > self.env.ale.lives() and self.args.negative_reward_on_death:
             total_reward -= 10
@@ -275,7 +356,7 @@ class MazeEnvironment:
 
         return matrix
 
-    @clru_cache(maxsize=1000, typed=False)
+    @fastcache.clru_cache(maxsize=1000, typed=False)
     def transition_indexed(self, state_index, action):
         delta_position = np.array(self.actions[action])
 

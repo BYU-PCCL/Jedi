@@ -33,7 +33,8 @@ class DQN(object):
                     self.train_output_states = self.train_network.build(inputs.states)
 
                 with tf.variable_scope('train_network', reuse=True):
-                    train_output_next_states = self.train_network.build(inputs.next_states)
+                    train_next_states_network = Type(args, environment, inputs)
+                    train_output_next_states = train_next_states_network.build(inputs.next_states)
 
             with tf.device('/gpu:1'):
                 with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
@@ -507,6 +508,7 @@ class WeightedLinear(Linear):
 class ActorCritic(Network):
     def __init__(self, args, environment, inputs):
         Network.__init__(self, args, environment, inputs)
+        self.actions = None
 
     def build(self, states):
         with op.context(default_activation_fn='relu'):
@@ -516,12 +518,12 @@ class ActorCritic(Network):
             with tf.variable_scope('actor'):
                 fc1, w1, b1 = op.linear(flattened_states, 512, name='fc1')
                 fc2, w2, b2 = op.linear(fc1, 512, name='fc2')
-                self.actions, w3, b3 = op.linear(fc2, 512, name='actions')
+                self.actions, w3, b3 = op.linear(fc2, self.environment.get_num_actions(), name='actions', activation_fn='none')
 
             with tf.variable_scope('critic'):
                 fc1, w1, b1 = op.linear(op.merge(flattened_states, self.actions), 512, name='fc1')
                 fc2, w2, b2 = op.linear(fc1, 512, name='fc2')
-                q_value, w3, b3 = op.linear(fc2, 512, name='actions')
+                q_value, w3, b3 = op.linear(fc2, 512, name='value', activation_fn='none')
 
             return q_value
 
@@ -532,12 +534,18 @@ class ActorCritic(Network):
         return self.actions
 
     def train_op(self, learning_rate, loss, global_step):
-        # It's about 2x faster for us to compute/apply the gradients than to use optimizer.minimize()
         optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate,
                                               decay=self.args.rms_decay,
                                               momentum=float(self.args.rms_momentum),
                                               epsilon=self.args.rms_eps)
-        gradient = optimizer.compute_gradients(loss)
-        gradients = [(grad, var) for grad, var in gradient if grad is not None]
+
+        critic_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network/critic')
+        actor_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network/actor')
+        action_gradient = tf.gradients(loss, [self.actions])[0]
+
+        critic_gradients = optimizer.compute_gradients(loss, var_list=critic_variables)
+        actor_gradients = optimizer.compute_gradients(action_gradient, var_list=actor_variables)
+
+        gradients = [(grad, var) for grad, var in critic_gradients + actor_gradients if grad is not None]
 
         return optimizer.apply_gradients(gradients, global_step=global_step)
