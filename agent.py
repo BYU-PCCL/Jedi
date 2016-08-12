@@ -221,6 +221,8 @@ class ExperienceAsAModel(Agent):
         self.agent_states = self.agent_states[self.agent_indexes]
         self.agent_states = np.expand_dims(np.expand_dims(self.agent_states, 1), 1)
 
+        self.state_argmax_to_agent_index_map = dict(zip(self.agent_indexes, range(len(self.agent_indexes))))
+
         self.state_distribution_prior = np.zeros(self.connectivity_matrix.shape[0], dtype=np.float16)
         self.state_distribution_prior[self.agent_indexes] = 1.0 / self.agent_indexes.shape[0]
 
@@ -246,13 +248,13 @@ class ExperienceAsAModel(Agent):
 
         # Generating Policies
         self.action_probabilities[self.memory.current] = self.last_action_probability
-        self.state_probabilities[self.memory.current] = self.distribution_state_given_policy(self.epsilon)[state.argmax()]
+        self.state_probabilities[self.memory.current] = self.distribution_state_given_policy(self.epsilon,
+                                                                                             self.current_policy())[state.argmax()]
 
         return Agent.after_action(self, state, reward, action, terminal, is_evaluate)
 
-    def distribution_state_given_policy(self, epsilon):
+    def distribution_state_given_policy(self, epsilon, actions):
         # p(s ; current policy and epsilon-greedy exploration)
-        actions = self.current_policy()
         matrix = self.connectivity_matrix * (epsilon / self.environment.get_num_actions())
 
         for i, s in enumerate(self.agent_indexes):
@@ -292,12 +294,13 @@ class ExperienceAsAModel(Agent):
             old_policy_action_probabilities = self.action_probabilities[idx].copy()
             old_policy_state_probabilities = self.state_probabilities[idx].copy()
 
-            policy_actions_for_sample, _, _ = self.network.q(states=states)
+            policy_actions = self.current_policy()
+            policy_actions_for_sample = policy_actions[[self.state_argmax_to_agent_index_map[i] for i in state_indexes]]
             on_policy_mask = actions == policy_actions_for_sample
 
             epsilon = self.args.exploration_epsilon_evaluation
             current_policy_action_probabilities = self.distribution_action_given_state(on_policy_mask, epsilon)
-            current_policy_state_probabilities = self.distribution_state_given_policy(epsilon)[state_indexes]
+            current_policy_state_probabilities = self.distribution_state_given_policy(epsilon, policy_actions)[state_indexes]
 
             weights = current_policy_action_probabilities / old_policy_action_probabilities
             weights *= current_policy_state_probabilities / old_policy_state_probabilities
