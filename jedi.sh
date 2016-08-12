@@ -234,6 +234,7 @@ elif [ "$1" = run_local ]; then
 elif [ "$1" = run_fsl ]; then
     # echo "i.e:  `./jedi.sh run_fsl_local --fsl_sbatch_arguments=\"stuff\" --fsl_python_arguments=\"stuff\"`"
 
+    FSL_RUN_ALL_ROMS=false
     for i in "$@"
     do
         case $i in
@@ -267,6 +268,7 @@ elif [ "$1" = run_fsl ]; then
 
 elif [ "$1" = run_fsl_local ]; then
 
+    FSL_RUN_ALL_ROMS=false
     for i in "$@"
     do
         case $i in
@@ -280,7 +282,8 @@ elif [ "$1" = run_fsl_local ]; then
     #echo "FSL_PY_ARGS was     >>>$FSL_PY_ARGS<<<"
     source $HOME/fsl_groups/fslg_pccl/configs/group_bashrc
     
-    ROM_LIST=('Breakout') # 'WizardOfWor') #'Robotank' 'Boxing' 'StarGunner' 'Pooyan' 'Seaquest' 'Tennis' 'Enduro' 'Gopher' 'Bowling' 'VideoPinball' 'Qbert' 'MontezumaRevenge' 'Phoenix' 'Krull' 'KungFuMaster' 'Pitfall' 'DoubleDunk' 'FishingDerby' 'Riverraid' 'Carnival' 'UpNDown' 'BattleZone' 'Asteroids' 'Atlantis' 'ChopperCommand' 'Skiing' 'PrivateEye' 'Zaxxon' 'AirRaid' 'Venture' 'YarsRevenge' 'ElevatorAction' 'Frostbite' 'DemonAttack' 'Centipede' 'NameThisGame' 'Gravitar' 'Pong' 'Freeway' 'Asterix' 'Amidar' 'Jamesbond' 'BankHeist' 'Tutankham' 'SpaceInvaders' 'Alien' 'Solaris' 'TimePilot' 'Berzerk' 'JourneyEscape' 'IceHockey' 'Assault' 'RoadRunner' 'BeamRider' 'Kangaroo' 'MsPacman' 'CrazyClimber')
+    if [ "$FSL_RUN_ALL_ROMS" = true ]
+    ROM_LIST=('Breakout' 'WizardOfWor' 'Robotank' 'Boxing' 'StarGunner' 'Pooyan' 'Seaquest' 'Tennis' 'Enduro' 'Gopher' 'Bowling' 'VideoPinball' 'Qbert' 'MontezumaRevenge' 'Phoenix' 'Krull' 'KungFuMaster' 'Pitfall' 'DoubleDunk' 'FishingDerby' 'Riverraid' 'Carnival' 'UpNDown' 'BattleZone' 'Asteroids' 'Atlantis' 'ChopperCommand' 'Skiing' 'PrivateEye' 'Zaxxon' 'AirRaid' 'Venture' 'YarsRevenge' 'ElevatorAction' 'Frostbite' 'DemonAttack' 'Centipede' 'NameThisGame' 'Gravitar' 'Pong' 'Freeway' 'Asterix' 'Amidar' 'Jamesbond' 'BankHeist' 'Tutankham' 'SpaceInvaders' 'Alien' 'Solaris' 'TimePilot' 'Berzerk' 'JourneyEscape' 'IceHockey' 'Assault' 'RoadRunner' 'BeamRider' 'Kangaroo' 'MsPacman' 'CrazyClimber')
 
     for i in "${!ROM_LIST[@]}"; do
         romname=${ROM_LIST[$i]}
