@@ -7,6 +7,14 @@ function help {
     echo "               [--fsl_username]          # username used when ssh-ing into the FSL"
 }
 
+function explain_dashboard {
+    echo "If you are using 'jedi dashboard', you can add a command line parameter in"
+    echo "   quotes (\"[cmd]\") that will be send to each screen to be run there."
+    echo ""
+    echo "           Example: jedi dashboard \"top\""
+    echo ""
+}
+
 
 function gen_fsl_sbatch_script {
     # DEFAULTS
@@ -100,62 +108,31 @@ function gen_fsl_sbatch_script {
 ###############################################################################
 
 #Defaults for named params:
-COMMAND=run_local
 FSL_SBATCH_ARGS="--nodes=1"
 FSL_PY_ARGS="--bypass_sql --threads=12"
 FSL_USERNAME="jacobj66"
 
 ###############################################################################
 
-# Parse command line parameters
-for i in "$@"
-do
-  case $i in
-    dashboard) echo "db"; COMMAND="dashboard"; shift ;;
-
-    run_all)   echo "al"; COMMAND="run_all"; shift ;;
-    run_local) echo "rl"; COMMAND="run_local"; shift ;;
-
-    --fsl_sbatch_arguments=*) FSL_SBATCH_ARGS="${i#*=}";  shift ;;
-    --fsl_python_arguments=*) FSL_PY_ARGS="${i#*=}";  shift ;;
-    --fsl_username=*) FSL_USERNAME="${i#*=}";  shift ;;
-    run_fsl)   echo "fs"; COMMAND="run_fsl"; shift ;;
-    run_fsl_local)   echo "fs"; COMMAND="run_fsl_local"; shift ;;
-    fsl_copy) 
-        echo "Starting copy";
-        # Copy
-        scp /mnt/pccfs/projects/jedi/*  jacobj66@ssh.fsl.byu.edu:/fslhome/jacobj66/fsl_groups/fslg_pccl/projects/jedi
-        exit 0; ;;
-    *) echo "Error: unrecognized flags."; help; exit 2
-  esac
-done
-
-if [ "$#" -lt 1 ]; then
-  echo "Using defaults!  I hope that's ok with you."
-fi
-
-echo "FSL_SBATCH_ARGS was >>>$FSL_SBATCH_ARGS<<<"
-echo "FSL_PY_ARGS was     >>>$FSL_PY_ARGS<<<"
-source $HOME/fsl_groups/fslg_pccl/configs/group_bashrc
-echo "NOW USING $COMMAND"
 
 ###############################################################################
+if [ "$1" = dashboard ]; then
 
-if [ "$COMMAND" = dashboard ]; then
-    echo "TOO FAR!!!"
-    exit 13
-    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc -c \"$RUN_COMMAND\" ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc"
+    if [ "$2" = "" ]; then
+        explain_dashboard;
+    fi
+    export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc -c \"$2\" ; bash --rcfile /mnt/pccfs/downloads/term_customization.bashrc"
     screen -c ./.screenrc
 
 ###############################################################################
 
-elif [ "$COMMAND" = run_all ]; then
+elif [ "$1" = run_all ]; then
 
     export JEDI_REMOTE_COMMAND="cd /mnt/pccfs/projects/jedi ; ./jedi.sh run_local ; bash"
     screen -c ./.screenrc
 
 
-elif [ "$COMMAND" = run_local ]; then
+elif [ "$1" = run_local ]; then
 
     echo "$(tput setaf 1)#####"
     echo "$HOSTNAME"
@@ -254,35 +231,72 @@ elif [ "$COMMAND" = run_local ]; then
 
 ###############################################################################
 
+elif [ "$1" = run_fsl ]; then
+    # echo "i.e:  `./jedi.sh run_fsl_local --fsl_sbatch_arguments=\"stuff\" --fsl_python_arguments=\"stuff\"`"
 
-elif [ "$COMMAND" = run_fsl ]; then
-  echo "Hi!  While I really want this feature to work, I am sad to report that it is not working yet"
-  echo "The job will be scheduled, but unfortunatly, it will probably break.  There is an issue with"
-  echo "the `module` command not working.  I have a ticket in place right now to ask about that."
-  echo ""
-  echo "For now, please ssh into [username]@ssh.fsl.byu.edu and then run it directly.  Thanks."
-  echo "i.e:  `./jedi.sh run_fsl_local --fsl_sbatch_arguments=\"stuff\" --fsl_python_arguments=\"stuff\"`"
-  echo ""
-  if [ "$FSL_USERNAME" = "" ]; then
-    echo "Please provide an fsl username to ssh with"
-    exit 4
-  fi
-  
-  ssh jacobj66@ssh.fsl.byu.edu -t "cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ && pwd &&  ./jedi.sh run_fsl_local --fsl_sbatch_arguments=\"$FSL_SBATCH_ARGS\" --fsl_python_arguments=\"$FSL_PY_ARGS\""
+    for i in "$@"
+    do
+        case $i in
+            --fsl_sbatch_arguments=*) FSL_SBATCH_ARGS="${i#*=}";  shift ;;
+            --fsl_python_arguments=*) FSL_PY_ARGS="${i#*=}";  shift ;;
+            --fsl_username=*) FSL_USERNAME="${i#*=}";  shift ;;
+            --run_all_roms)           FSL_RUN_ALL_ROMS=true;;
+            *) echo "Error: unrecognized flags: $i";
+        esac
+    done
+
+    if [ "$FSL_USERNAME" = "" ]; then
+        echo "Please provide an fsl username to ssh with"
+        exit 4
+    fi
+    runallroms=""
+    if [ $FSL_RUN_ALL_ROMS = true ]; then
+        runallroms="--run_all_roms" 
+    fi
+    cmd="cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ && pwd &&  ./jedi.sh run_fsl_local --fsl_sbatch_arguments=\"$FSL_SBATCH_ARGS\" --fsl_python_arguments=\"$FSL_PY_ARGS\" $runallroms"
+    if
+    ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "$cmd"
   
 ###############################################################################
 
+#-DONE- fsl usename needs to be a paramter
+#-DONE- jedi dashboard "command" is not working
+# TODO: add --run_all_roms flag to determine if ROM_LIST is used at all
+# TODO: clean up code (remove all debugging stuff)
+# TODO: improve help for jedi.sh
 
- elif [ "$COMMAND" = run_fsl_local ]; then
-   ROM_LIST=('Breakout' ) #'WizardOfWor') #'Robotank' 'Boxing' 'StarGunner' 'Pooyan' 'Seaquest' 'Tennis' 'Enduro' 'Gopher' 'Bowling' 'VideoPinball' 'Qbert' 'MontezumaRevenge' 'Phoenix' 'Krull' 'KungFuMaster' 'Pitfall' 'DoubleDunk' 'FishingDerby' 'Riverraid' 'Carnival' 'UpNDown' 'BattleZone' 'Asteroids' 'Atlantis' 'ChopperCommand' 'Skiing' 'PrivateEye' 'Zaxxon' 'AirRaid' 'Venture' 'YarsRevenge' 'ElevatorAction' 'Frostbite' 'DemonAttack' 'Centipede' 'NameThisGame' 'Gravitar' 'Pong' 'Freeway' 'Asterix' 'Amidar' 'Jamesbond' 'BankHeist' 'Tutankham' 'SpaceInvaders' 'Alien' 'Solaris' 'TimePilot' 'Berzerk' 'JourneyEscape' 'IceHockey' 'Assault' 'RoadRunner' 'BeamRider' 'Kangaroo' 'MsPacman' 'CrazyClimber')
-   echo "Welcome.  About to start up the batches"
+elif [ "$1" = run_fsl_local ]; then
 
-   for i in "${!ROM_LIST[@]}"; do
-     romname=${ROM_LIST[$i]}
-     gen_fsl_sbatch_script $FSL_SBATCH_ARGS "--jobname=$romname"
-     echo "python main.py $FSL_PY_ARGS --rom=$romname" >> sbatch.tmp 
-     sbatch sbatch.tmp
-     rm sbatch.tmp
-  done
+    for i in "$@"
+    do
+        case $i in
+            --fsl_sbatch_arguments=*) FSL_SBATCH_ARGS="${i#*=}";;
+            --fsl_python_arguments=*) FSL_PY_ARGS="${i#*=}";;
+            --run_all_roms)           FSL_RUN_ALL_ROMS=true;;
+        esac
+    done
 
+    #echo "FSL_SBATCH_ARGS was >>>$FSL_SBATCH_ARGS<<<"
+    #echo "FSL_PY_ARGS was     >>>$FSL_PY_ARGS<<<"
+    source $HOME/fsl_groups/fslg_pccl/configs/group_bashrc
+    
+    ROM_LIST=('Breakout') # 'WizardOfWor') #'Robotank' 'Boxing' 'StarGunner' 'Pooyan' 'Seaquest' 'Tennis' 'Enduro' 'Gopher' 'Bowling' 'VideoPinball' 'Qbert' 'MontezumaRevenge' 'Phoenix' 'Krull' 'KungFuMaster' 'Pitfall' 'DoubleDunk' 'FishingDerby' 'Riverraid' 'Carnival' 'UpNDown' 'BattleZone' 'Asteroids' 'Atlantis' 'ChopperCommand' 'Skiing' 'PrivateEye' 'Zaxxon' 'AirRaid' 'Venture' 'YarsRevenge' 'ElevatorAction' 'Frostbite' 'DemonAttack' 'Centipede' 'NameThisGame' 'Gravitar' 'Pong' 'Freeway' 'Asterix' 'Amidar' 'Jamesbond' 'BankHeist' 'Tutankham' 'SpaceInvaders' 'Alien' 'Solaris' 'TimePilot' 'Berzerk' 'JourneyEscape' 'IceHockey' 'Assault' 'RoadRunner' 'BeamRider' 'Kangaroo' 'MsPacman' 'CrazyClimber')
+
+    for i in "${!ROM_LIST[@]}"; do
+        romname=${ROM_LIST[$i]}
+        gen_fsl_sbatch_script $FSL_SBATCH_ARGS "--jobname=$romname"
+        echo "python main.py $FSL_PY_ARGS --rom=$romname" >> sbatch.tmp 
+        sbatch sbatch.tmp
+        rm sbatch.tmp
+    done
+  
+elif [ "$1" = fsl_copy ]; then
+
+    if [ "$FSL_USERNAME" = "" ]; then
+        echo "Please provide an fsl username to scp with"
+        exit 4
+    fi
+
+    scp /mnt/pccfs/projects/jedi/*  $FSL_USERNAME@ssh.fsl.byu.edu:/fslhome/$FSL_USERNAME/fsl_groups/fslg_pccl/projects/jedi
+ 
 fi

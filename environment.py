@@ -24,6 +24,9 @@ class ArrayEnvironment:
     def get_state_space(self):
         return tuple([1])
 
+    def get_action_space(self):
+        return tuple()  # No dimension
+
     def act(self, action):
 
         reward = self.reward(self.position, action)
@@ -125,6 +128,9 @@ class AtariEnvironment:
 
     def get_state_space(self):
         return self.state.shape
+
+    def get_action_space(self):
+        return tuple()  # No dimension
 
     def act(self, action):
         total_reward = 0
@@ -239,6 +245,9 @@ class MazeEnvironment:
 
     def get_state_space(self):
         return self.get_state(self.position).shape
+
+    def get_action_space(self):
+        return tuple()  # No dimension
 
     def act(self, action):
         self.frames += 1

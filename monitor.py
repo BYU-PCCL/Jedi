@@ -42,17 +42,11 @@ class Monitor:
         self.episode_stats = Stats()
         self.commit_ready = False
 
-        # Always try to connect - this avoids issues where you forget to
-        # pip install psycopg2, or werid DNS issues, etc.
-        
         if not self.args.bypass_sql:
-            import psycopg2
-            self.conn = psycopg2.connect(host=args.sql_host,
-                                        port=args.sql_port,
-                                        database=args.sql_db,
-                                        user=args.sql_user,
-                                        password=args.sql_password)
-            self.cur = self.conn.cursor()
+            import sqlite3
+            self.conn = sqlite3.connect(args.sql_db_file)
+            self.cursor = self.conn.cursor()
+
         self.save_config(args)
 
         if self.args.vis:
@@ -66,7 +60,7 @@ class Monitor:
 
     def save_stat(self, stat_name, value, is_evaluation):
         if not self.args.bypass_sql:
-            self.cur.execute("INSERT INTO stats (agent_name, episode, stat_name, value, is_evaluation) VALUES (%s, %s, %s, %s, %s)",
+            self.cursor.execute("INSERT INTO stats (agent_name, episode, stat_name, value, is_evaluation) VALUES (?, ?, ?, ?, ?)",
                              (self.args.name, self.environment.get_episodes(), stat_name, float(value), is_evaluation))
             self.commit_ready = True
 
@@ -77,8 +71,7 @@ class Monitor:
 
     def save_config(self, settings):
         if not self.args.bypass_sql:
-            self.cur.execute("INSERT INTO configs (agent_name, configs) VALUES (%s, %s)",
-                             (self.args.name, str(settings)))
+            self.cursor.execute("INSERT INTO configs (agent_name, configs) VALUES (?, ?)", (self.args.name, str(settings)))
             self.commit_ready = True
             self.commit()
                       

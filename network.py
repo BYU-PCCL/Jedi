@@ -15,7 +15,6 @@ class DQN(object):
         self.training_iterations = 0
         self.batch_loss = 0
         self.learning_rate = 0
-        gradients = []
 
         self.sess = self.start_session(args)
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -53,13 +52,11 @@ class DQN(object):
                     self.loss_op = self.train_network.loss(truth=truth, prediction=prediction)
                     self.priority_op = self.train_network.priority(truth=truth, prediction=prediction)
 
-                # It's about 2x faster for us to compute/apply the gradients than to use optimizer.minimize()
                 with tf.name_scope('optimizer'):
                     self.learning_rate_op = self.train_network.learning_rate(step=self.global_step)
-                    optimizer = self.train_network.optimizer(self.learning_rate_op)
-                    gradient = optimizer.compute_gradients(self.loss_op)
-                    gradients += [(grad, var) for grad, var in gradient if grad is not None]
-                    self.train_op = optimizer.apply_gradients(gradients, global_step=self.global_step)
+                    self.train_op = self.train_network.train_op(learning_rate=self.learning_rate_op,
+                                                                loss=self.loss_op,
+                                                                global_step=self.global_step)
 
                 self.target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
                 self.train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network')
@@ -151,7 +148,7 @@ class Network(object):
             with tf.name_scope('inputs'):
                 self.states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()), name='state', unsigned=True)
                 self.next_states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()), name='next_state', unsigned=True)
-                self.actions_placeholder = op.int([None], name='action_index', unsigned=True)
+                self.actions_placeholder = op.int([None] + list(environment.get_action_space()), name='action_index', unsigned=True)
                 self.terminals_placeholder = op.int([None], name='terminal')
                 self.rewards_placeholder = op.int([None], name='reward', bits=32)
 
@@ -181,11 +178,16 @@ class Network(object):
     def priority(self, truth, prediction):
         return tf.pow(truth - prediction, self.args.priority_temperature)
 
-    def optimizer(self, learning_rate):
-        return tf.train.RMSPropOptimizer(learning_rate=learning_rate,
+    def train_op(self, learning_rate, loss, global_step):
+        # It's about 2x faster for us to compute/apply the gradients than to use optimizer.minimize()
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate,
                                          decay=self.args.rms_decay,
                                          momentum=float(self.args.rms_momentum),
                                          epsilon=self.args.rms_eps)
+        gradient = optimizer.compute_gradients(loss)
+        gradients = [(grad, var) for grad, var in gradient if grad is not None]
+
+        return optimizer.apply_gradients(gradients, global_step=global_step)
 
     def learning_rate(self, step):
         decayed_lr = tf.train.exponential_decay(self.args.learning_rate_start,
@@ -498,5 +500,44 @@ class WeightedLinear(Linear):
 
     def loss(self, truth, prediction):
         delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
-        weights = op.optional_clip(self.inputs.weights_placeholder, 0, 10, True)
+        weights = op.optional_clip(self.inputs.weights_placeholder, 0, 100, True)
         return tf.reduce_mean(weights * tf.square(delta, name='square'), name='loss')
+
+
+class ActorCritic(Network):
+    def __init__(self, args, environment, inputs):
+        Network.__init__(self, args, environment, inputs)
+
+    def build(self, states):
+        with op.context(default_activation_fn='relu'):
+
+            flattened_states = op.flatten(states, name="states")
+
+            with tf.variable_scope('actor'):
+                fc1, w1, b1 = op.linear(flattened_states, 512, name='fc1')
+                fc2, w2, b2 = op.linear(fc1, 512, name='fc2')
+                self.actions, w3, b3 = op.linear(fc2, 512, name='actions')
+
+            with tf.variable_scope('critic'):
+                fc1, w1, b1 = op.linear(op.merge(flattened_states, self.actions), 512, name='fc1')
+                fc2, w2, b2 = op.linear(fc1, 512, name='fc2')
+                q_value, w3, b3 = op.linear(fc2, 512, name='actions')
+
+            return q_value
+
+    def prediction(self, train_output_states):
+        return op.tofloat(train_output_states)
+
+    def action(self, output):
+        return self.actions
+
+    def train_op(self, learning_rate, loss, global_step):
+        # It's about 2x faster for us to compute/apply the gradients than to use optimizer.minimize()
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate,
+                                              decay=self.args.rms_decay,
+                                              momentum=float(self.args.rms_momentum),
+                                              epsilon=self.args.rms_eps)
+        gradient = optimizer.compute_gradients(loss)
+        gradients = [(grad, var) for grad, var in gradient if grad is not None]
+
+        return optimizer.apply_gradients(gradients, global_step=global_step)

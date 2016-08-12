@@ -10,11 +10,7 @@ class Parameters():
         self.parser = argparse.ArgumentParser(description='Q-Learner')
         sql_args = self.parser.add_argument_group('PostgreSQL Monitor')
         sql_args.add_argument('--bypass_sql', action='store_const', const=True, default=False)
-        sql_args.add_argument('--sql_host', default="192.168.23.44")
-        sql_args.add_argument('--sql_db', default="vinci")
-        sql_args.add_argument('--sql_port', default=5432, type=int)
-        sql_args.add_argument('--sql_user', default="postgres")
-        sql_args.add_argument('--sql_password', default="beware the pccl", type=str)
+        sql_args.add_argument('--sql_db_file', default="jedi.db", type=str)
 
         harness_args = self.parser.add_argument_group('Harness')
         harness_args.add_argument('--vis', action='store_const', const=True, default=False)
