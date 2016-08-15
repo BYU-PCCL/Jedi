@@ -20,7 +20,7 @@ class Parameters():
         harness_args.add_argument('--verbose', action='store_const', const=True, default=False)
         harness_args.add_argument('--deterministic', action='store_const', const=True, default=False)
         harness_args.add_argument('--random_seed', default=42, type=int)
-        harness_args.add_argument('--total_ticks', default=200, type=int) # 10000000
+        harness_args.add_argument('--total_ticks', default=10000000, type=int)
         harness_args.add_argument('--evaluate_frequency', default=10000, type=int, help='in ticks')
         harness_args.add_argument('--console_frequency', default=1000, type=int, help='in ticks')
         harness_args.add_argument('--max_frames_per_episode', default=10000, type=int)
@@ -81,7 +81,9 @@ class Parameters():
         changed_args = ['rom'] + [key + "=" + str(getattr(args, key)) for key in vars(args)
                                   if key not in ignored_args and getattr(args, key) != self.parser.get_default(key)]
         changed_args = "-".join(changed_args) if len(changed_args) > 0 else "defaults"
-        args.name = args.name + '-' + changed_args + '-' + str(random.randint(10000000, 99999999))
+
+        args.job_id = str(random.randint(10000000, 99999999))
+        args.name = args.name + '-' + changed_args + '-' + args.job_id
 
         if args.test:
             args.environment_type = 'array'

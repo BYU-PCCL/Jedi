@@ -71,7 +71,11 @@ bar_format = '{percentage:3.0f}% | {n_fmt} {elapsed} {rate_fmt}'
 if args.verbose:
     bar_format = '{percentage:3.0f}% | {bar} | {n_fmt} [{elapsed}, {rate_fmt}]'
 
-for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0, smoothing=0.01, bar_format=bar_format):
+main_loop = range(args.total_ticks)
+if args.verbose:
+    main_loop = tqdm(range(args.total_ticks), ncols=40, mininterval=0, smoothing=0, bar_format=bar_format)
+
+for tick in main_loop:
     # Determine if we should evaluate this episode or not
     is_evaluate = is_evaluate or ((tick + 1) % args.evaluate_frequency) == 0
     is_evaluate = is_evaluate and tick > args.iterations_before_training
@@ -83,7 +87,7 @@ for tick in tqdm(range(args.total_ticks), ncols=40, mininterval=0, smoothing=0.0
     # Log stats and visualize
     if tick >= args.iterations_before_training:
         monitor.monitor(state, reward, terminal, q_values, action, is_evaluate)
-    elif tick == 0:
+    elif tick == 0 and args.verbose:
         print("   ({} iterations before training)".format(args.iterations_before_training), end="")
 
     # Reset if needed

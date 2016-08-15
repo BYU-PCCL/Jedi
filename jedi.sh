@@ -129,7 +129,6 @@ function gen_fsl_sbatch_script {
 #Defaults for named params:
 # FSL_SBATCH_ARGS="--nodes=1"
 # FSL_PY_ARGS="--bypass_sql --threads=12"
-FSL_USERNAME="jacobj66"
 
 ###############################################################################
 
@@ -262,14 +261,12 @@ elif [ "$1" = run_fsl ]; then
         esac
     done
     
-    echo "FSL_SBATCH_ARGS was >>>$FSL_SBATCH_ARGS<<<"
-    echo "FSL_PY_ARGS was     >>>$FSL_PY_ARGS<<<"
-    
     if [ "$FSL_USERNAME" = "" ]; then
         echo "Please provide an fsl username to ssh with"
         exit 4
     fi
 
+    rsync -ru /mnt/pccfs/projects/jedi/ $FSL_USERNAME@ssh.fsl.byu.edu:/fslhome/$FSL_USERNAME/fsl_groups/fslg_pccl/projects/jedi/ --exclude '.git' --exclude '*.pyc' --exclude '__pycache__'
     ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ && pwd &&  ./jedi.sh run_fsl_local --fsl_sbatch_arguments=\"$FSL_SBATCH_ARGS\" --fsl_python_arguments=\"$FSL_PY_ARGS\" $FSL_RUN_ALL_ROMS"
   
 ###############################################################################
@@ -292,8 +289,6 @@ elif [ "$1" = run_fsl_local ]; then
         esac
     done
 
-    echo "FSL_SBATCH_ARGS was >>>$FSL_SBATCH_ARGS<<<"
-    echo "FSL_PY_ARGS was     >>>$FSL_PY_ARGS<<<"
     source $HOME/fsl_groups/fslg_pccl/configs/group_bashrc
     
     if [ "$FSL_RUN_ALL_ROMS" = true ]; then
@@ -309,19 +304,8 @@ elif [ "$1" = run_fsl_local ]; then
     else
         gen_fsl_sbatch_script "--jobname=single_command" $FSL_SBATCH_ARGS
         echo "python main.py $FSL_PY_ARGS"  >> sbatch.tmp
-        # sbatch sbatch.tmp
-        # rm sbatch.tmp
+         sbatch sbatch.tmp
+         rm sbatch.tmp
     fi
 
-################### COPY TO FSL ###############################################
- # Temp until our old pccgit gitlab server supports ssl/https
-elif [ "$1" = fsl_copy ]; then
-
-    if [ "$FSL_USERNAME" = "" ]; then
-        echo "Please provide an fsl username to scp with"
-        exit 4
-    fi
-
-    scp /mnt/pccfs/projects/jedi/*  $FSL_USERNAME@ssh.fsl.byu.edu:/fslhome/$FSL_USERNAME/fsl_groups/fslg_pccl/projects/jedi
- 
 fi
