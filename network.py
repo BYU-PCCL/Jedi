@@ -523,7 +523,7 @@ class ActorCritic(Network):
             with tf.variable_scope('critic'):
                 fc1, w1, b1 = op.linear(op.merge(flattened_states, self.actions), 512, name='fc1')
                 fc2, w2, b2 = op.linear(fc1, 512, name='fc2')
-                q_value, w3, b3 = op.linear(fc2, 512, name='value', activation_fn='none')
+                q_value, w3, b3 = op.linear(fc2, 1, name='value', activation_fn='none')
 
             return q_value
 

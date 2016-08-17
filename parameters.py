@@ -9,8 +9,10 @@ class Parameters():
     def __init__(self):
         self.parser = argparse.ArgumentParser(description='Q-Learner')
         sql_args = self.parser.add_argument_group('PostgreSQL Monitor')
-        sql_args.add_argument('--bypass_sql', action='store_const', const=True, default=False)
-        sql_args.add_argument('--sql_db_file', default="jedi.db", type=str)
+        sql_args.add_argument('--use_sql', action='store_const', const=True, default=False)
+        sql_args.add_argument('--sql_db_file', default="jedi.sqlite", type=str)
+        sql_args.add_argument('--save_episode_stats', action='store_const', const=True, default=False)
+        sql_args.add_argument('--commit_buffer', default=1000, type=int)
 
         harness_args = self.parser.add_argument_group('Harness')
         harness_args.add_argument('--vis', action='store_const', const=True, default=False)
@@ -77,7 +79,7 @@ class Parameters():
     def parse(self):
         args = self.parser.parse_args()
         ignored_args = ['verbose', 'sql_host', 'sql_db', 'sql_port', 'sql_user', 'sql_password',
-                        'vis', 'name', 'total_ticks', 'evaluate_frequency', 'bypass_sql']
+                        'vis', 'name', 'total_ticks', 'evaluate_frequency', 'use_sql']
         changed_args = ['rom'] + [key + "=" + str(getattr(args, key)) for key in vars(args)
                                   if key not in ignored_args and getattr(args, key) != self.parser.get_default(key)]
         changed_args = "-".join(changed_args) if len(changed_args) > 0 else "defaults"
@@ -89,7 +91,6 @@ class Parameters():
             args.environment_type = 'array'
             args.network_type = 'linear'
             args.agent_type = 'test'
-            args.bypass_sql = True
             args.copy_frequency = 10
             args.iterations_before_training = 1000
 

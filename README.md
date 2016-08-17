@@ -25,6 +25,30 @@ export PATH=$PATH:.
 ```
 
 
+SQL Tables
+==========
+```sql
+DROP TABLE stats;
+DROP TABLE agents;
+CREATE TABLE stats(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, 
+  agent_id INTEGER,
+  episode INTEGER,
+  stat_name VARCHAR(25),
+  value NUMERIC,
+  is_evaluation BOOL,
+  FOREIGN KEY(agent_id) REFERENCES agents(id)
+);
+
+CREATE TABLE agents(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, 
+  agent_name TEXT,
+  configs TEXT
+);
+
+CREATE INDEX agent_id_idx ON stats (agent_id);
+```
+
 Findings
 ========
 Clipping the error, but NOT clipping the reward results in a network that does not learn at all.
