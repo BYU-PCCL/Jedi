@@ -49,8 +49,6 @@ class Monitor:
         self.start = time.time()
         self.inserts = []
 
-        self.cv2 = None
-
         if self.args.use_sql:
             self.conn = sqlite3.connect(args.sql_db_file, timeout=1.0)
             self.cursor = self.conn.cursor()
@@ -84,6 +82,7 @@ class Monitor:
                         time.sleep(np.random.random() * 5.0)
 
                 print("Fatal error - couldn't store stat data")
+                sys.stdout.flush()
                 quit()
 
     def save_config(self, settings):
@@ -99,6 +98,7 @@ class Monitor:
                     time.sleep(np.random.random() * 5.0)
 
             print("Fatal error - couldn't store config data")
+            sys.stdout.flush()
             quit()
 
                       
@@ -110,7 +110,8 @@ class Monitor:
     def print_stats(self, stats, evaluation=False):
 
         actions = np.zeros(1, dtype=np.int)
-        if evaluation:
+
+        if len(self.environment.get_action_space()) == 0 and evaluation:
             actions = np.zeros(self.environment.get_num_actions())
             stat_actions = stats['action'] if type(stats['action']) is list else []
 
@@ -119,19 +120,19 @@ class Monitor:
 
             actions = np.array((actions / np.sum(actions)) * 100, dtype=np.uint32)
 
-        log = " |  episodes: {}  " \
+        log = " | episodes: {}  " \
               "max q: {:<8.4f} " \
               "q std: {:<8.4f} " \
-              "score: [{:>2g},{:<2g}]  " \
+              "score: [{:>4.2f},{:<4.2f}]  " \
               "lr: {:<11.7f} " \
-              "eps: {:<9.5} " \
+              "eps: {:<9.3} " \
               "loss: {:<10.6f} " \
               "frames: {}  " \
               "actions: {}".format(self.environment.get_episodes(),
                                    float(stats['max_q']),
                                    float(stats['max_std']),
-                                   stats['min_score'],
-                                   stats['max_score'],
+                                   float(stats['min_score']),
+                                   float(stats['max_score']),
                                    float(self.network.learning_rate),
                                    float(self.agent.epsilon),
                                    float(self.network.batch_loss),
@@ -156,23 +157,8 @@ class Monitor:
 
         sys.stdout.flush()
 
-    def start_visualizer(self):
-        if self.args.vis:
-            import cv2
-            self.cv2 = cv2
-            cv2.startWindowThread()
-            cv2.namedWindow("preview", cv2.WINDOW_NORMAL)
-
-    def end_visualizer(self):
-        self.cv2.destroyAllWindows()
-
     def monitor(self, state, reward, terminal, q_values, action, is_evaluate, tick):
         self.iterations = tick
-
-        if self.cv2 is not None and self.args.vis:
-            pixels = self.environment.render()
-            if pixels is not None:
-                self.cv2.imshow("preview", pixels)
 
         for stats in [self.console_stats, self.episode_stats]:
             if q_values is not None:

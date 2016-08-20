@@ -41,13 +41,6 @@ def commander(signal, frame):
             args.verbose = False
         elif command == "reset-network":
             network.initialize()
-        elif command == "vis":
-            if args.vis:
-                args.vis = False
-                monitor.end_visualizer()
-            else:
-                args.vis = parameters.can_vis()
-                monitor.start_visualizer()
         elif command == "eval":
             global eval_pending
             eval_pending = True
@@ -89,6 +82,9 @@ for tick in main_loop:
         monitor.monitor(state, reward, terminal, q_values, action, is_evaluate, tick)
     elif tick == 0 and args.verbose:
         print("   ({} iterations before training)".format(args.iterations_before_training), end="")
+
+    if args.vis:
+       environment.render()
 
     # Reset if needed
     if terminal:

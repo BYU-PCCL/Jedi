@@ -73,6 +73,7 @@ def _parse_activation(activation):
     return {
         'relu': tf.nn.relu,
         'sigmoid': tf.nn.sigmoid,
+        'tanh': tf.nn.tanh,
         'none': None}[activation if activation != 'default' else _context['default_activation_fn']]
 
 

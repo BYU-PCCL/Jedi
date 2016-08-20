@@ -31,7 +31,7 @@ class Parameters():
         environment_args.add_argument('--actions_per_tick', default=1, type=int)
         environment_args.add_argument('--rom', default="Breakout")
         environment_args.add_argument('--environment_type', default="atari")
-        environment_args.add_argument('--openaigym_environment', default="CartPole-v0")
+        environment_args.add_argument('--openaigym_environment', default="Pendulum-v0")
         environment_args.add_argument('--max_initial_noop', default=8, type=int)
         environment_args.add_argument('--resize_width', default=84, type=int)
         environment_args.add_argument('--resize_height', default=84, type=int)
@@ -54,8 +54,8 @@ class Parameters():
         agent_args.add_argument('--priority_temperature', default=2.0, type=float, help='n where tderror^n')
 
         network_args = self.parser.add_argument_group('Network')
-        network_args.add_argument('--dqn_type', default='dqn', type=str, choices=['dqn', 'convergence', 'optimistic'])
-        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained', 'baselineduel', 'baselinedouble', 'baselinedoubleduel', 'maximummargin', 'weightedlinear', 'actorcritic'])
+        network_args.add_argument('--dqn_type', default='dqn', type=str, choices=['dqn', 'convergence', 'optimistic', 'actorcritic'])
+        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained', 'baselineduel', 'baselinedouble', 'baselinedoubleduel', 'maximummargin', 'weightedlinear'])
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.00025, type=float)
@@ -66,7 +66,7 @@ class Parameters():
         network_args.add_argument('--rms_decay', default=.90, type=float)
         network_args.add_argument('--rms_momentum', default=0.99, type=float)
         network_args.add_argument('--gpu_fraction', default=.90, type=float)
-        network_args.add_argument('--target_network_alpha', default=1.0, type=float)
+        network_args.add_argument('--target_network_alpha', default=0.0, type=float)
         network_args.add_argument('--copy_frequency', default=2500, type=int, help='in calls to train')
         network_args.add_argument('--clip_reward', default=1, type=int)
         network_args.add_argument('--clip_tderror', default=1, type=int)
@@ -136,7 +136,8 @@ class Parameters():
     def parse_dqn(self, env_string):
         return {'dqn': network.DQN,
                 'convergence': network.ConvergenceDQN,
-                'optimistic': network.OptimisticDQN}[env_string]
+                'optimistic': network.OptimisticDQN,
+                'actorcritic': network.ActorCritic}[env_string]
 
     def parse_environment(self, env_string):
         return {'atari': environment.AtariEnvironment,
@@ -164,8 +165,7 @@ class Parameters():
                 'causal': network.Causal,
                 'maximummargin': network.MaximumMargin,
                 'constrained': network.Constrained,
-                'weightedlinear': network.WeightedLinear,
-                'actorcritic': network.ActorCritic}[network_string]
+                'weightedlinear': network.WeightedLinear}[network_string]
 
 #environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')
 

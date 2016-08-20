@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # vim: filetype=sh
 
 if [ "$1" = help ]; then
@@ -107,6 +108,74 @@ elif [ "$1" = fsl_pull ]; then
     rsync -ru --progress $FSL_USERNAME@ssh.fsl.byu.edu:/fslhome/$FSL_USERNAME/fsl_groups/fslg_pccl/projects/jedi/jedi.sqlite /mnt/pccfs/projects/jedi/fsl_jedi.sqlite
 
 
+elif [ "$1" = fsl_status ]; then
+
+    for i in "$@"
+    do
+        case $i in
+            --fsl_username=*)         FSL_USERNAME="${i#*=}"; shift ;;
+        esac
+    done
+
+    if [ "$FSL_USERNAME" = "" ]; then
+        echo "Please provide an fsl username to ssh with --fsl_username"
+        exit 4
+    fi
+
+    ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ && paste -d '\n' <(ls *.out) <(cat *.out | grep 'Name : ' | sed 's/^ *//;s/ *$//') <(tail -n1 -q *.out) <(echo '') && squeue --long -u $FSL_USERNAME"
+
+elif [ "$1" = fsl_kill ]; then
+
+    for i in "$@"
+    do
+        case $i in
+            --fsl_username=*)         FSL_USERNAME="${i#*=}"; shift ;;
+        esac
+    done
+
+    if [ "$FSL_USERNAME" = "" ]; then
+        echo "Please provide an fsl username to ssh with --fsl_username"
+        exit 4
+    fi
+
+    ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "squeue --long -u $FSL_USERNAME"
+    echo ""
+    echo ""
+    read -p "Are you sure you wish to cancel all these jobs belonging to $FSL_USERNAME? " -n 1 -r
+    echo    # (optional) move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]
+    then
+        ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "scancel -u $FSL_USERNAME"
+        echo "Jobs killed"
+    fi
+
+
+elif [ "$1" = fsl_clean ]; then
+
+    for i in "$@"
+    do
+        case $i in
+            --fsl_username=*)         FSL_USERNAME="${i#*=}"; shift ;;
+        esac
+    done
+
+    if [ "$FSL_USERNAME" = "" ]; then
+        echo "Please provide an fsl username to ssh with --fsl_username"
+        exit 4
+    fi
+
+    ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "squeue --long -u $FSL_USERNAME"
+    echo ""
+    echo ""
+    read -p "Are you sure you wish to delete all the jedi output? " -n 1 -r
+    echo    # (optional) move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]
+    then
+        ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ && rm *.out"
+        echo "Output cleaned."
+    fi
+
+
 # Command to push code up to the FSL and run jobs
 elif [ "$1" = run_fsl ]; then
 
@@ -128,7 +197,7 @@ elif [ "$1" = run_fsl ]; then
         exit 4
     fi
 
-    rsync -ru --progress /mnt/pccfs/projects/jedi/ $FSL_USERNAME@ssh.fsl.byu.edu:/fslhome/$FSL_USERNAME/fsl_groups/fslg_pccl/projects/jedi/ --exclude '.git' --exclude '*.pyc' --exclude '__pycache__' --exclude '.idea'
+    rsync -ru --progress /mnt/pccfs/projects/jedi/ $FSL_USERNAME@ssh.fsl.byu.edu:/fslhome/$FSL_USERNAME/fsl_groups/fslg_pccl/projects/jedi/ --exclude '.git' --exclude '*.pyc' --exclude '__pycache__' --exclude '.idea' --exclude 'fsl_jedi.sqlite'
 
     ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ && pwd &&  ./jedi.sh __run_fsl_local__ --fsl_sbatch_arguments=\"$FSL_SBATCH_ARGS\" --fsl_python_arguments=\"$FSL_PY_ARGS\" $FSL_RUN_ALL_ROMS"
 

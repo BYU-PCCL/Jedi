@@ -77,6 +77,9 @@ class ArrayEnvironment:
             if abs(self.position[0] - self.goal) > 3:
                 break
 
+    def min_state_value(self):
+        return 0
+
     def generate_test(self):
         states = []
         next_states = []
@@ -135,7 +138,7 @@ class GenericOpenAIGym:
         self.state, reward, self.terminal, _ = self.env.step(action)
         self.score += reward
 
-        return self.get_state(), reward, self.terminal
+        return self.get_state(), reward, self.terminal or (self.frames >= self.args.max_frames_per_episode)
 
     def get_episodes(self):
         return self.episodes

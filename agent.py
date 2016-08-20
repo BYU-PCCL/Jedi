@@ -203,15 +203,23 @@ class DensityExplorer(Agent):
         else:
             return action[0], qs[0]
 
+
 class ContinuousAction(Agent):
     def __init__(self, args, environment, network):
         assert len(environment.get_action_space()) > 0
         Agent.__init__(self, args, environment, network)
+        import scipy.stats as stats
+        self.truncnorm = stats.truncnorm
 
     def get_action(self, state, is_evaluate):
+        self.iterations += 1
         action, q, additional_ops = self.network.q(states=[self.phi])
 
+        if random.random() <= (self.epsilon if not is_evaluate else self.args.exploration_epsilon_evaluation):
+            action[0] = np.random.triangular(-2, np.clip(action[0], -2, 2), 2)
+
         return action[0], q[0]
+
 
 class ExperienceAsAModel(Agent):
     def __init__(self, args, environment, network):
@@ -310,14 +318,23 @@ class ExperienceAsAModel(Agent):
             current_policy_state_probabilities = self.distribution_state_given_policy(epsilon, policy_actions)[state_indexes]
 
             weights = current_policy_action_probabilities / old_policy_action_probabilities
-            weights *= current_policy_state_probabilities / old_policy_state_probabilities
+            # weights *= current_policy_state_probabilities / old_policy_state_probabilities
 
             tderror, loss = self.network.train(states=states,
                                                actions=actions,
                                                terminals=terminals,
                                                next_states=next_states,
                                                rewards=rewards,
-                                               weights=np.nan_to_num(weights))
+                                               weights=weights)
+
+            if np.isnan(loss) or self.network.training_iterations % 100 == 0:
+                print np.isnan(loss)
+                print 'old_action_probs'
+                print np.array_str(old_policy_action_probabilities, precision=3, max_line_width=250)
+                print 'current_action_probs'
+                print np.array_str(current_policy_action_probabilities, precision=3, max_line_width=250)
+                print 'weights'
+                print np.array_str(weights, precision=3, max_line_width=250)
 
             self.memory.update(idx, priority=tderror)
 

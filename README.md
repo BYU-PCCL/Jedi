@@ -135,3 +135,9 @@ Ideas Without Context
 - http://arxiv.org/pdf/1605.05365v2.pdf - consider adding a "duration" output for how long to apply the command
 
 - http://arxiv.org/pdf/1602.07714v1.pdf - gradient/reward clipping sucks
+
+
+
+Experiment Data to be deleted
+=============================
+

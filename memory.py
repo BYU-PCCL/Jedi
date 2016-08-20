@@ -9,7 +9,7 @@ class Memory:
         self.args = args
         self.dims = environment.get_state_space()
 
-        self.actions = np.empty(args.replay_memory_size, dtype=np.uint8)
+        self.actions = np.empty(tuple([args.replay_memory_size]) + environment.get_action_space(), dtype=np.uint8)
         self.rewards = np.empty(args.replay_memory_size, dtype=np.int32)
         self.priorities = np.zeros(args.replay_memory_size, dtype=np.float64)
         self.sample_priorities = np.zeros(args.replay_memory_size, dtype=np.float64)
