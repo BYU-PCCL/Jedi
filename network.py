@@ -186,14 +186,14 @@ class Network(object):
     def train(self, **kwargs):
         data = self.build_feed_dict(**kwargs)
 
-        self.update()
-
         _, priority, self.batch_loss, self.learning_rate, self.training_iterations = self.sess.run([self.train_op,
                                                                                                     self.priority_op,
                                                                                                     self.loss_op,
                                                                                                     self.learning_rate_op,
                                                                                                     self.global_step],
                                                                                                    feed_dict=data)
+
+        self.update()
 
         return priority, self.batch_loss
 

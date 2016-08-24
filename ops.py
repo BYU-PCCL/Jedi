@@ -77,7 +77,7 @@ def _parse_activation(activation):
         'none': None}[activation if activation != 'default' else _context['default_activation_fn']]
 
 
-def linear(source, output_size, stddev=0.002, initializer='truncated-normal', bias_start=0.01, activation_fn='default',
+def linear(source, output_size, stddev=0.02, initializer='truncated-normal', bias_start=0.01, activation_fn='default',
            name='linear'):
     shape = source.get_shape().as_list()
 
