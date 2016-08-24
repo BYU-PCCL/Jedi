@@ -141,7 +141,7 @@ elif [ "$1" = fsl_kill ]; then
     ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "squeue --long -u $FSL_USERNAME"
     echo ""
     echo ""
-    read -p "Are you sure you wish to cancel all these jobs belonging to $FSL_USERNAME? " -n 1 -r
+    read -p "Are you sure you wish to cancel all these jobs belonging to $FSL_USERNAME? [y/n]" -n 1 -r
     echo    # (optional) move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]
     then
@@ -164,10 +164,10 @@ elif [ "$1" = fsl_clean ]; then
         exit 4
     fi
 
-    ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "squeue --long -u $FSL_USERNAME"
+    ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "squeue --long -u $FSL_USERNAME && ls -al *.out"
     echo ""
     echo ""
-    read -p "Are you sure you wish to delete all the jedi output? " -n 1 -r
+    read -p "Are you sure you wish to delete all the jedi output? [y/n]" -n 1 -r
     echo    # (optional) move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]
     then
@@ -199,7 +199,7 @@ elif [ "$1" = run_fsl ]; then
 
     rsync -ru --progress /mnt/pccfs/projects/jedi/ $FSL_USERNAME@ssh.fsl.byu.edu:/fslhome/$FSL_USERNAME/fsl_groups/fslg_pccl/projects/jedi/ --exclude '.git' --exclude '*.pyc' --exclude '__pycache__' --exclude '.idea' --exclude 'fsl_jedi.sqlite'
 
-    ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ && pwd &&  ./jedi.sh __run_fsl_local__ --fsl_sbatch_arguments=\"$FSL_SBATCH_ARGS\" --fsl_python_arguments=\"$FSL_PY_ARGS\" $FSL_RUN_ALL_ROMS"
+    ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ &&  ./jedi.sh __run_fsl_local__ --fsl_sbatch_arguments=\"$FSL_SBATCH_ARGS\" --fsl_python_arguments=\"$FSL_PY_ARGS\" $FSL_RUN_ALL_ROMS"
 
 # Hidden command only run by the fsl ssh node
 elif [ "$1" = __run_fsl_local__ ]; then
@@ -268,21 +268,18 @@ elif [ "$1" = __run_fsl_local__ ]; then
           SBATCH___GRES_OPT="# Not going to use a gpu"
         fi
 
-        echo "#!/bin/bash"                 >> sbatch.tmp
-        echo ""                            >> sbatch.tmp
-        echo "#SBATCH --time=$walltime"    >> sbatch.tmp  # walltime
-        echo "#SBATCH --ntasks=$cpus"      >> sbatch.tmp  # number of processor cores (i.e. tasks)
-        echo "#SBATCH --nodes=$nodes"      >> sbatch.tmp  # number of nodes
-        echo $SBATCH___GRES_OPT            >> sbatch.tmp  # gpu reqs (empty if gpus=0)
-        echo "#SBATCH --qos=dw87"          >> sbatch.tmp  # Runs us on the m8g2 nodes
-        echo "#SBATCH --mem=$mem$mem_unit" >> sbatch.tmp  # total memory requested (Note this is different than --mem-per-cpu option. # G or M available.
-        echo "#SBATCH -J '$jobname'"       >> sbatch.tmp  # job name
-        echo "#SBATCH --gid=fslg_pccl"     >> sbatch.tmp  # give group access
-        echo ""                            >> sbatch.tmp
-        echo "source $HOME/fsl_groups/fslg_pccl/configs/group_bashrc" >> sbatch.tmp # Modules, etc.
-        echo "module list"  >> sbatch.tmp # Debugging
-        echo "hostname"     >> sbatch.tmp # Debugging
-        echo "pwd"          >> sbatch.tmp # Debugging
+        echo "#!/bin/bash"                 >> sbatch.$$.tmp
+        echo ""                            >> sbatch.$$.tmp
+        echo "#SBATCH --time=$walltime"    >> sbatch.$$.tmp  # walltime
+        echo "#SBATCH --ntasks=$cpus"      >> sbatch.$$.tmp  # number of processor cores (i.e. tasks)
+        echo "#SBATCH --nodes=$nodes"      >> sbatch.$$.tmp  # number of nodes
+        echo $SBATCH___GRES_OPT            >> sbatch.$$.tmp  # gpu reqs (empty if gpus=0)
+        echo "#SBATCH --qos=dw87"          >> sbatch.$$.tmp  # Runs us on the m8g2 nodes
+        echo "#SBATCH --mem=$mem$mem_unit" >> sbatch.$$.tmp  # total memory requested (Note this is different than --mem-per-cpu option. # G or M available.
+        echo "#SBATCH -J '$jobname'"       >> sbatch.$$.tmp  # job name
+        echo "#SBATCH --gid=fslg_pccl"     >> sbatch.$$.tmp  # give group access
+        echo ""                            >> sbatch.$$.tmp
+        echo "source $HOME/fsl_groups/fslg_pccl/configs/group_bashrc" >> sbatch.$$.tmp # Modules, etc.
     }
 
     source $HOME/fsl_groups/fslg_pccl/configs/group_bashrc
@@ -293,15 +290,16 @@ elif [ "$1" = __run_fsl_local__ ]; then
         for i in "${!ROM_LIST[@]}"; do
             romname=${ROM_LIST[$i]}
             gen_fsl_sbatch_script "--jobname=$romname" $FSL_SBATCH_ARGS 
-            echo "python main.py $FSL_PY_ARGS --rom=$romname" >> sbatch.tmp 
-            sbatch sbatch.tmp
-            rm sbatch.tmp
+            echo "python main.py $FSL_PY_ARGS --rom=$romname" >> sbatch.$$.tmp
+            sbatch sbatch.$$.tmp
+            rm sbatch.$$.tmp
         done
     else
         gen_fsl_sbatch_script "--jobname=single_command" $FSL_SBATCH_ARGS
-        echo "python main.py $FSL_PY_ARGS"  >> sbatch.tmp
-         sbatch sbatch.tmp
-         rm sbatch.tmp
+        echo "python main.py $FSL_PY_ARGS"  >> sbatch.$$.tmp
+
+        sbatch sbatch.$$.tmp
+        rm sbatch.$$.tmp
     fi
 
 fi

@@ -24,7 +24,7 @@ class Agent(object):
         self.iterations = 0
         self.ready_queue = Queue.Queue(maxsize=self.args.threads)
 
-        self.phi = np.zeros(tuple([args.phi_frames]) + environment.get_state_space(), dtype=np.uint8)
+        self.phi = np.zeros(tuple([args.phi_frames]) + environment.get_state_space(), dtype=environment.get_state_datatype())
 
         self.threads = []
         for id in range(args.threads):
@@ -64,6 +64,7 @@ class Agent(object):
         while True:
             self.ready_queue.get()  # Notify main thread a training has complete
             states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
+
             tderror, loss = self.network.train(states=states, actions=actions, terminals=terminals,
                                                next_states=next_states, rewards=rewards)
             self.memory.update(idx, priority=tderror)
@@ -83,8 +84,6 @@ class Test(Agent):
                                              next_states=ideal_next_states,
                                              rewards=ideal_rewards)
 
-            # print loss
-
             policy, qs, _ = self.network.q(
                 states=[[[s] for _ in range(self.args.phi_frames)] for s in range(self.environment.size)])
 
@@ -92,8 +91,8 @@ class Test(Agent):
 
             print(self.network.training_iterations,
                   "".join(str(p) if i != self.environment.goal else '-' for i, p in enumerate(policy)),
-                  np.max(goal_q),
-                  loss)
+                  "Max Q:", np.max(goal_q),
+                  "Loss:", loss)
 
         for s in range(self.environment.size):
             print(s if s != self.environment.goal else '-',
@@ -208,15 +207,12 @@ class ContinuousAction(Agent):
     def __init__(self, args, environment, network):
         assert len(environment.get_action_space()) > 0
         Agent.__init__(self, args, environment, network)
-        import scipy.stats as stats
-        self.truncnorm = stats.truncnorm
 
     def get_action(self, state, is_evaluate):
         self.iterations += 1
         action, q, additional_ops = self.network.q(states=[self.phi])
 
-        if random.random() <= (self.epsilon if not is_evaluate else self.args.exploration_epsilon_evaluation):
-            action[0] = np.random.triangular(-2, np.clip(action[0], -2, 2), 2)
+        action[0] += np.random.randn(self.environment.get_num_actions()) / (self.environment.episodes + self.environment.frames + 1.0)
 
         return action[0], q[0]
 
@@ -317,8 +313,8 @@ class ExperienceAsAModel(Agent):
             current_policy_action_probabilities = self.distribution_action_given_state(on_policy_mask, epsilon)
             current_policy_state_probabilities = self.distribution_state_given_policy(epsilon, policy_actions)[state_indexes]
 
-            weights = current_policy_action_probabilities / old_policy_action_probabilities
-            # weights *= current_policy_state_probabilities / old_policy_state_probabilities
+            # weights = current_policy_action_probabilities / old_policy_action_probabilities
+            weights = current_policy_state_probabilities / old_policy_state_probabilities
 
             tderror, loss = self.network.train(states=states,
                                                actions=actions,
@@ -327,14 +323,14 @@ class ExperienceAsAModel(Agent):
                                                rewards=rewards,
                                                weights=weights)
 
-            if np.isnan(loss) or self.network.training_iterations % 100 == 0:
-                print np.isnan(loss)
-                print 'old_action_probs'
-                print np.array_str(old_policy_action_probabilities, precision=3, max_line_width=250)
-                print 'current_action_probs'
-                print np.array_str(current_policy_action_probabilities, precision=3, max_line_width=250)
-                print 'weights'
-                print np.array_str(weights, precision=3, max_line_width=250)
+            # if np.isnan(loss) or self.network.training_iterations % 100 == 0:
+            #     print np.isnan(loss)
+            #     print 'old_action_probs'
+            #     print np.array_str(old_policy_action_probabilities, precision=3, max_line_width=250)
+            #     print 'current_action_probs'
+            #     print np.array_str(current_policy_action_probabilities, precision=3, max_line_width=250)
+            #     print 'weights'
+            #     print np.array_str(weights, precision=3, max_line_width=250)
 
             self.memory.update(idx, priority=tderror)
 

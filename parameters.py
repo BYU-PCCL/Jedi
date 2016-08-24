@@ -5,6 +5,8 @@ import network
 import agent
 import environment
 
+from inspect import isclass
+
 class Parameters():
     def __init__(self):
         self.parser = argparse.ArgumentParser(description='Q-Learner')
@@ -17,7 +19,6 @@ class Parameters():
         harness_args = self.parser.add_argument_group('Harness')
         harness_args.add_argument('--vis', action='store_const', const=True, default=False)
         harness_args.add_argument('--test', action='store_const', const=True, default=False)
-        harness_args.add_argument('--convergence', action='store_const', const=True, default=False)
         harness_args.add_argument('--name', default="learner")
         harness_args.add_argument('--verbose', action='store_const', const=True, default=False)
         harness_args.add_argument('--deterministic', action='store_const', const=True, default=False)
@@ -30,7 +31,7 @@ class Parameters():
         environment_args = self.parser.add_argument_group('Environment')
         environment_args.add_argument('--actions_per_tick', default=1, type=int)
         environment_args.add_argument('--rom', default="Breakout")
-        environment_args.add_argument('--environment_type', default="atari")
+        environment_args.add_argument('--environment_type', default="Atari", choices=self.module_to_dict(environment).keys())
         environment_args.add_argument('--openaigym_environment', default="Pendulum-v0")
         environment_args.add_argument('--max_initial_noop', default=8, type=int)
         environment_args.add_argument('--resize_width', default=84, type=int)
@@ -39,7 +40,7 @@ class Parameters():
         environment_args.add_argument('--negative_reward_on_death', action='store_const', const=True, default=False)
 
         agent_args = self.parser.add_argument_group('Agent')
-        agent_args.add_argument('--agent_type', default='agent', type=str, choices=['agent', 'qexplorer', 'density', 'test', 'convergence', 'lookahead', 'experiencemodel', 'continuousaction'])
+        agent_args.add_argument('--agent_type', default='Agent', type=str, choices=self.module_to_dict(agent).keys())
         agent_args.add_argument('--phi_frames', default=4, type=int)
         agent_args.add_argument('--replay_memory_size', default=1000000, type=int)
         agent_args.add_argument('--batch_size', default=32, type=int)
@@ -54,8 +55,7 @@ class Parameters():
         agent_args.add_argument('--priority_temperature', default=2.0, type=float, help='n where tderror^n')
 
         network_args = self.parser.add_argument_group('Network')
-        network_args.add_argument('--dqn_type', default='dqn', type=str, choices=['dqn', 'convergence', 'optimistic', 'actorcritic'])
-        network_args.add_argument('--network_type', default='baseline', type=str, choices=['baseline', 'linear', 'density', 'causal', 'constrained', 'baselineduel', 'baselinedouble', 'baselinedoubleduel', 'maximummargin', 'weightedlinear'])
+        network_args.add_argument('--network_type', default='Baseline', type=str, choices=self.module_to_dict(network, [network.Network]).keys())
         network_args.add_argument('--discount', default=.99, type=float)
         network_args.add_argument('--learning_rate_start', default=0.00025, type=float)
         network_args.add_argument('--learning_rate_end', default=0.00025, type=float)
@@ -72,9 +72,6 @@ class Parameters():
         network_args.add_argument('--clip_tderror', default=1, type=int)
         network_args.add_argument('--tf_summary_path', default="/tmp/network", type=str)
         network_args.add_argument('--tf_checkpoint_path', default="/tmp/checkpoints", type=str)
-        network_args.add_argument('--convergence-repetitions', default=100, type=int, help='calls to train per thread')
-        network_args.add_argument('--convergence-percent_reset', default=0.1, type=float, help='[0-1]')
-        network_args.add_argument('--convergence-sample_threads', default=12, type=int)
 
     def parse(self):
         args = self.parser.parse_args()
@@ -88,22 +85,12 @@ class Parameters():
         args.name = args.name + '-' + changed_args + '-' + args.job_id
 
         if args.test:
-            args.environment_type = 'array'
-            args.network_type = 'linear'
-            args.agent_type = 'test'
+            args.environment_type = 'Array'
+            args.network_type = 'Linear'
+            args.agent_type = 'Test'
             args.copy_frequency = 10
             args.iterations_before_training = 1000
 
-        if args.convergence:
-            args.dqn_type = 'convergence'
-            args.agent_type = 'convergence'
-            args.exploration_epsilon_decay *= args.convergence_repetitions
-            args.copy_frequency *= args.convergence_repetitions
-            args.console_frequency = 50
-            args.evaluate_frequency = 1000
-            args.iterations_before_training = 100000
-
-        args.dqn_class = self.parse_dqn(args.dqn_type)
         args.environment_class = self.parse_environment(args.environment_type)
         args.network_class = self.parse_network_type(args.network_type)
         args.agent_class = self.parse_agent_type(args.agent_type)
@@ -133,39 +120,20 @@ class Parameters():
         except ImportError:
             return False
 
-    def parse_dqn(self, env_string):
-        return {'dqn': network.DQN,
-                'convergence': network.ConvergenceDQN,
-                'optimistic': network.OptimisticDQN,
-                'actorcritic': network.ActorCritic}[env_string]
+    def module_to_dict(self, module, exclude=[]):
+        return dict([(x, getattr(module, x)) for x in dir(module)
+                     if isclass(getattr(module, x))
+                     and x not in exclude
+                     and getattr(module, x) not in exclude])
 
     def parse_environment(self, env_string):
-        return {'atari': environment.AtariEnvironment,
-                'array': environment.ArrayEnvironment,
-                'maze':  environment.MazeEnvironment,
-                'openaigym': environment.GenericOpenAIGym}[env_string]
+        return self.module_to_dict(environment)[env_string]
 
     def parse_agent_type(self, agent_string):
-        return {'agent': agent.Agent,
-                'qexplorer': agent.QExplorer,
-                'test': agent.Test,
-                'density': agent.DensityExplorer,
-                'lookahead': agent.Lookahead,
-                'convergence': agent.Convergence,
-                'experiencemodel': agent.ExperienceAsAModel,
-                'continuousaction': agent.ContinuousAction}[agent_string]
+        return self.module_to_dict(agent)[agent_string]
 
     def parse_network_type(self, network_string):
-        return {'baseline': network.Baseline,
-                'baselinedouble': network.BaselineDouble,
-                'baselinedoubleduel': network.BaselineDoubleDuel,
-                'baselineduel': network.BaselineDuel,
-                'linear': network.Linear,
-                'density': network.Density,
-                'causal': network.Causal,
-                'maximummargin': network.MaximumMargin,
-                'constrained': network.Constrained,
-                'weightedlinear': network.WeightedLinear}[network_string]
+        return self.module_to_dict(network, [network.Network])[network_string]
 
 #environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')
 

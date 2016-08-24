@@ -1,18 +1,41 @@
 import tensorflow as tf
 import subprocess
-import os
-import numpy as np
 import ops as op
-import random
 from functools import reduce
 
-class DQN(object):
-    def __init__(self, Type, args, environment):
+class Network(object):
+    class Inputs:
+        def __getattr__(self, item):
+            processed = {'actions': self.actions_placeholder,
+                         'rewards': op.optional_clip(self.rewards_placeholder, -1.0, 1.0, self.args.clip_reward),
+                         'states': op.environment_scale(self.states_placeholder, self.environment),
+                         'next_states': op.environment_scale(self.next_states_placeholder, self.environment),
+                         'terminals': self.terminals_placeholder}
+
+            processed.update(self.preprocessing())
+
+            return processed[item]
+
+        def __init__(self, args, environment):
+            self.args = args
+            self.environment = environment
+
+            with tf.name_scope('inputs'):
+                self.states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()),
+                                                 name='state', unsigned=True)
+                self.next_states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()),
+                                                      name='next_state', unsigned=True)
+                self.actions_placeholder = op.float([None] + list(environment.get_action_space()), name='actions')
+                self.terminals_placeholder = op.float([None], name='terminal')
+                self.rewards_placeholder = op.float([None], name='reward')
+
+        def preprocessing(self):
+            return {}
+
+    def __init__(self, args, environment):
         self.args = args
         self.environment = environment
         self.tensorboard_process = None
-        self.Type = Type
-
         self.training_iterations = 0
         self.batch_loss = 0
         self.learning_rate = 0
@@ -22,8 +45,6 @@ class DQN(object):
         self.learning_rate_op = self.build_learning_rate(step=self.global_step)
 
         with op.context(floatx=tf.float32, floatsafe=False):
-
-            self.inputs = Type.Inputs(args, environment)
 
             self.train_op = None
             self.priority_op = None
@@ -44,47 +65,84 @@ class DQN(object):
 
         self.initialize()
 
+    def build(self, states):
+        pass
+
+    def truth(self, train_output_states, train_output_next_states, target_output_next_states):
+        return op.tofloat(self.inputs.rewards) + self.args.discount * (
+        1.0 - op.tofloat(self.inputs.terminals)) * op.tofloat(op.max(target_output_next_states))
+
+    def prediction(self, train_output_states):
+        return op.get(op.tofloat(train_output_states), self.inputs.actions)
+
+    def loss(self, truth, prediction):
+        assert prediction.get_shape().as_list() == truth.get_shape().as_list(), 'prediction and truth shapes must match'
+        delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
+        return tf.reduce_sum(tf.square(delta, name='square'), name='loss')
+
+    def priority(self, truth, prediction):
+        return tf.pow(truth - prediction, self.args.priority_temperature)
+
+    def action(self, output):
+        return op.argmax(output)
+
     def build_networks(self):
+
+        self.inputs = self.Inputs(self.args, self.environment)
+
         with tf.device('/gpu:0'):
             with tf.variable_scope('target_network'):
-                target_network = self.Type(self.args, self.environment, self.inputs, 'target_network/next_states')
-                target_output_next_states = target_network.build(self.inputs.next_states)
+                target_output_next_states = self.build(self.inputs.next_states)
 
             with tf.variable_scope('train_network'):
-                train_network = self.Type(self.args, self.environment, self.inputs, 'train_network/states')
-                train_output_states = train_network.build(self.inputs.states)
+                train_output_states = self.build(self.inputs.states)
 
             with tf.variable_scope('train_network', reuse=True):
-                train_next_states_network = self.Type(self.args, self.environment, self.inputs, 'train_network/next_states')
-                train_output_next_states = train_next_states_network.build(self.inputs.next_states)
+                train_output_next_states = self.build(self.inputs.next_states)
 
         with tf.device('/gpu:1'):
             with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
-                self.agent_network = self.Type(self.args, self.environment, self.inputs, 'target_network/states')
-                self.agent_output = self.agent_network.build(self.inputs.states)
-                self.agent_output_action = self.agent_network.action(self.agent_output)
+                self.agent_output = self.build(self.inputs.states)
+                self.agent_output_action = self.action(self.agent_output)
 
         with tf.device('/gpu:1'):
             with tf.name_scope('loss'):
-                truth = tf.stop_gradient(train_network.truth(train_output_states=train_output_states,
-                                                             train_output_next_states=train_output_next_states,
-                                                             target_output_next_states=target_output_next_states))
-                prediction = train_network.prediction(train_output_states=train_output_states)
+                truth = self.truth(train_output_states=train_output_states,
+                                   train_output_next_states=train_output_next_states,
+                                   target_output_next_states=target_output_next_states)
 
-                self.loss_op = train_network.loss(truth=truth, prediction=prediction)
-                self.priority_op = train_network.priority(truth=truth, prediction=prediction)
+                truth = tf.stop_gradient(truth)
+
+                prediction = self.prediction(train_output_states=train_output_states)
+
+                self.loss_op = self.loss(truth=truth, prediction=prediction)
+                self.priority_op = self.priority(truth=truth, prediction=prediction)
 
             with tf.name_scope('optimizer'):
-                self.train_op = train_network.train_op(learning_rate=self.learning_rate_op,
-                                                       loss=self.loss_op,
-                                                       global_step=self.global_step)
+                self.train_op = self.build_train_op(learning_rate=self.learning_rate_op,
+                                                    loss=self.loss_op,
+                                                    global_step=self.global_step)
+
+    def build_train_op(self, learning_rate, loss, global_step):
+        # It's about 2x faster for us to compute/apply the gradients than to use optimizer.minimize()
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate,
+                                              decay=self.args.rms_decay,
+                                              momentum=float(self.args.rms_momentum),
+                                              epsilon=self.args.rms_eps)
+        gradient = optimizer.compute_gradients(loss)
+        gradients = [(grad, var) for grad, var in gradient if grad is not None]
+
+        return optimizer.apply_gradients(gradients, global_step=global_step)
 
     def build_assign_ops(self):
-        target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
-        train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network')
-        return [
-            target.assign(self.args.target_network_alpha * target + (1 - self.args.target_network_alpha) * train) for
-            target, train in zip(target_vars, train_vars)]
+        with tf.name_scope('update_ops'):
+            target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
+            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network')
+
+            return [
+                # https://www.tensorflow.org/versions/r0.10/api_docs/python/train.html#ExponentialMovingAverage
+                target.assign_sub((1 - self.args.target_network_alpha) * (target - train)) for
+                target, train in zip(target_vars, train_vars)]
 
     def initialize(self):
         self.sess.run(tf.initialize_all_variables())
@@ -108,12 +166,12 @@ class DQN(object):
             self.tensorboard_process.kill()
         tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
         self.tensorboard_process = subprocess.Popen(["tensorboard", "--logdir=" + self.args.tf_summary_path],
-                                                    stdout=open(os.devnull, 'w'),
-                                                    stderr=open(os.devnull, 'w'),
+                                                    # stdout=open(os.devnull, 'w'),
+                                                    # stderr=open(os.devnull, 'w'),
                                                     close_fds=True)
 
     def update(self):
-        if (self.training_iterations + 1) % self.args.copy_frequency == 0:
+        if self.training_iterations % self.args.copy_frequency == 0:
             self.sess.run(self.assign_ops)
 
     def build_feed_dict(self, **kwargs):
@@ -127,6 +185,8 @@ class DQN(object):
     def train(self, **kwargs):
         data = self.build_feed_dict(**kwargs)
 
+        self.update()
+
         _, priority, self.batch_loss, self.learning_rate, self.training_iterations = self.sess.run([self.train_op,
                                                                                                     self.priority_op,
                                                                                                     self.loss_op,
@@ -134,18 +194,22 @@ class DQN(object):
                                                                                                     self.global_step],
                                                                                                    feed_dict=data)
 
-        self.update()
-
         return priority, self.batch_loss
 
     def q(self, **kwargs):
         data = self.build_feed_dict(**kwargs)
-        additional_ops = self.agent_network.additional_q_ops if self.agent_network is not None else []
-        results = self.sess.run([self.agent_output_action, self.agent_output] + additional_ops,
+
+        agent_output = self.agent_output
+        additional_ops = []
+
+        if type(self.agent_output) is list:
+            agent_output = self.agent_output[0]
+            additional_ops = self.agent_output[1:]
+
+        results = self.sess.run([self.agent_output_action, agent_output] + additional_ops,
                                 feed_dict=data)
 
         return results[0], results[1], results[2:]
-
 
     def build_learning_rate(self, step):
         decayed_lr = tf.train.exponential_decay(self.args.learning_rate_start,
@@ -156,82 +220,9 @@ class DQN(object):
         return tf.maximum(self.args.learning_rate_end, decayed_lr)
 
 
-class Network(object):
-
-    class Inputs:
-        def __getattr__(self, item):
-            processed = {'actions': self.actions_placeholder,
-                         'rewards': op.optional_clip(self.rewards_placeholder, -1, 1, self.args.clip_reward),
-                         'states': op.environment_scale(self.states_placeholder, self.environment),
-                         'next_states': op.environment_scale(self.next_states_placeholder, self.environment),
-                         'terminals': self.terminals_placeholder}
-
-            processed.update(self.preprocessing())
-
-            return processed[item]
-
-        def __init__(self, args, environment):
-            self.args = args
-            self.environment = environment
-
-            with tf.name_scope('inputs'):
-                self.states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()), name='state', unsigned=True)
-                self.next_states_placeholder = op.int([None, args.phi_frames] + list(environment.get_state_space()), name='next_state', unsigned=True)
-                self.actions_placeholder = op.float([None] + list(environment.get_action_space()), name='actions')
-                self.terminals_placeholder = op.float([None], name='terminal')
-                self.rewards_placeholder = op.float([None], name='reward')
-
-        def preprocessing(self):
-            return {}
-
-    def __init__(self, args, environment, inputs, role):
-        self.args = args
-        self.environment = environment
-        self.inputs = inputs
-        self.additional_q_ops = []
-        self.role = role
-
-    def build(self, states):
-        pass
-
-    def truth(self, train_output_states, train_output_next_states, target_output_next_states):
-        return op.tofloat(self.inputs.rewards) + self.args.discount * (
-        1.0 - op.tofloat(self.inputs.terminals)) * op.tofloat(op.max(target_output_next_states))
-
-    def prediction(self, train_output_states):
-        return op.get(op.tofloat(train_output_states), self.inputs.actions)
-
-    def loss(self, truth, prediction):
-        assert prediction.get_shape().as_list() == truth.get_shape().as_list(), 'prediction and truth shapes must match'
-        delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
-        return tf.reduce_mean(tf.square(delta, name='square'), name='loss')
-
-    def priority(self, truth, prediction):
-        return tf.pow(truth - prediction, self.args.priority_temperature)
-
-    def train_op(self, learning_rate, loss, global_step):
-        # It's about 2x faster for us to compute/apply the gradients than to use optimizer.minimize()
-        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate,
-                                         decay=self.args.rms_decay,
-                                         momentum=float(self.args.rms_momentum),
-                                         epsilon=self.args.rms_eps)
-        gradient = optimizer.compute_gradients(loss)
-        gradients = [(grad, var) for grad, var in gradient if grad is not None]
-
-        return optimizer.apply_gradients(gradients, global_step=global_step)
-
-
-
-    def action(self, output):
-        return op.argmax(output)
-
-    def debug(self, session, data):
-        pass
-
-
 class Linear(Network):
     def build(self, states):
-        with op.    context(default_activation_fn='relu'):
+        with op.context(default_activation_fn='relu'):
             fc1,    w1, b1 = op.linear(op.flatten(states, name="fc1_flatten"), 500, name='fc1')
             fc2,    w2, b2 = op.linear(fc1, 500, name='fc2')
             value,  w3, b3 = op.linear(fc2, self.environment.get_num_actions(), activation_fn='none', name='value')
@@ -275,7 +266,7 @@ class BaselineDuel(Network):
             return output
 
 
-class BaselineDouble(Baseline):
+class BaselineDouble(Network):
     def truth(self, train_output_states, train_output_next_states, target_output_next_states):
         # Double DQN - http://arxiv.org/pdf/1509.06461v3.pdf
         double_q_next = tf.stop_gradient(op.get(target_output_next_states, op.argmax(train_output_next_states)))
@@ -303,9 +294,6 @@ class Constrained(Network):
 
         def preprocessing(self):
             return {'lookaheads': op.environment_scale(self.lookaheads_placeholder, self.environment)}
-
-    def __init__(self, args, environment, inputs, role):
-        Network.__init__(self, args, environment, inputs, role)
 
     def build(self, states):
 
@@ -338,9 +326,6 @@ class Constrained(Network):
 
 
 class Density(Network):
-    def __init__(self, args, environment, inputs, role):
-        Network.__init__(self, args, environment, inputs, role)
-
     def build(self, states):
         with op.context(default_activation_fn='relu'):
             conv1,    w1, b1 = op.conv2d(states, size=8, filters=32, stride=4, name='conv1')
@@ -351,15 +336,22 @@ class Density(Network):
             raw_sigma, w6, b6 = op.linear(fc4, self.environment.get_num_actions(), name='variance')
 
             raw_sigma += 0.0001  # to avoid divide by zero
-            self.sigma = tf.exp(raw_sigma)
-            self.additional_q_ops.append(self.sigma)
+            sigma = tf.exp(raw_sigma)
 
-        return output
+        return output, sigma
+
+    def truth(self, train_output_states, train_output_next_states, target_output_next_states):
+        return op.tofloat(self.inputs.rewards) + self.args.discount * (
+        1.0 - op.tofloat(self.inputs.terminals)) * op.tofloat(op.max(target_output_next_states[0]))
+
+    def prediction(self, train_output_states):
+        sigma = train_output_states[0]
+        return op.get(op.tofloat(train_output_states), self.inputs.actions), sigma
 
     def loss(self, truth, prediction):
-        y = prediction
+        y = prediction[0]
         mu = truth
-        sigma = op.get(self.sigma, self.inputs.actions)
+        sigma = op.get(prediction[1], self.inputs.actions)
 
         # Gaussian log-likelihood
         result = op.tofloat(y - mu)  # Primarily to prevent under/overflow since they are already float16
@@ -371,9 +363,6 @@ class Density(Network):
 
 
 class Causal(Network):
-    def __init__(self, args, environment, inputs, role):
-        Network.__init__(self, args, environment, inputs, role)
-
     def build(self, states):
         with op.context(default_activation_fn='relu'):
             # Common Perception
@@ -398,39 +387,7 @@ class Causal(Network):
             return output
 
 
-class ConvergenceDQN(DQN):
-    def __init__(self, Type, args, environment, role):
-        DQN.__init__(self, Type, args, environment, role)
-
-        self.reset_ops = []
-
-        with tf.name_scope('random_reset'):
-            for var in self.train_vars:
-                with tf.device(var.device):
-                    size = np.prod(var.get_shape().as_list())
-                    num_reset = int(round(size * args.convergence_percent_reset))
-
-                    indexes = tf.constant(range(size), dtype=tf.int64)  # if dim > 4000000 else tf.uint32
-                    indexes = tf.random_shuffle(indexes)
-                    indicies_to_reset = tf.slice(indexes, begin=[0], size=[num_reset])
-
-                    self.testvar = var
-
-                    random_values = tf.truncated_normal([num_reset], stddev=.02, dtype=var.dtype.base_dtype) # todo: use var.initializer
-                    self.reset_ops.append(tf.scatter_update(var, indices=[indicies_to_reset], updates=[random_values]))
-
-        self.tensorboard()
-
-    def update(self):
-        if (self.training_iterations + 1) % self.args.copy_frequency == 0:
-            self.sess.run(self.assign_ops)  # Update target network
-            self.sess.run(self.reset_ops)   # then reset the train network weights
-
-
 class MaximumMargin(BaselineDuel):
-    def __init__(self, args, environment, inputs, role):
-        BaselineDuel.__init__(self, args, environment, inputs, role)
-
     def truth(self, train_output_states, train_output_next_states, target_output_next_states):
         return op.tofloat(self.inputs.rewards) + self.args.discount * (
         1.0 - op.tofloat(self.inputs.terminals)) * op.tofloat(op.max(target_output_next_states))
@@ -446,57 +403,6 @@ class MaximumMargin(BaselineDuel):
                + tf.reduce_mean((1.0 - variance)**2)
 
 
-class OptimisticDQN(DQN):
-    def __init__(self, Type, args, environment, role):
-        DQN.__init__(self, Type, args, environment, role)
-
-        # n = environment.get_num_actions()
-        # qs = self.actor_output
-        # qs -= op.min(qs, keep_dims=True)
-        # qs /= op.max(qs, keep_dims=True)
-        # approximate_one_hot_argmax = qs
-        #
-        # index_matrix = op.tofloat(tf.range(n)) * op.tofloat(tf.ones([args.batch_size, n]))
-        # indexes = op.max(approximate_one_hot_argmax * index_matrix)
-        #
-        # mean_index, index_variance = tf.nn.moments(indexes, [0])
-        # target_index = (n - 1.0) / 2.0
-        # target_variance = target_index ** 2
-        #
-        # self.testop = indexes
-        # self.testop2 = index_variance
-        #
-        # self.initialization_cost = (index_variance - target_variance)**2 # + (mean_index - target_index)**2 #
-
-        n = environment.get_num_actions()
-        indexes = range(args.batch_size)
-        random.shuffle(indexes)
-        target_qs = tf.one_hot(tf.constant(indexes) % n, n, on_value=3.0, off_value=2.9, axis=1)
-
-        self.initialization_cost = tf.reduce_mean((self.agent_output - target_qs) ** 2) + tf.reduce_mean((self.train_output_states - target_qs) ** 2)
-
-        initialization_optimizer = self.agent_network.optimizer(learning_rate=0.00001)
-        self.initialization_train_op = initialization_optimizer.minimize(self.initialization_cost)
-        self.initialized = False
-
-        self.initialize_op = tf.initialize_all_variables()
-        self.initialize()
-        self.tensorboard()
-
-    def train(self, **kwargs):
-        data = self.build_feed_dict(**kwargs)
-        if self.initialized is False:
-            for i in range(10000):
-                _, cost, = self.sess.run([self.initialization_train_op, self.initialization_cost], feed_dict=data)
-
-                if cost < 0.001:
-                    break
-
-            self.initialized = True
-
-        return DQN.train(self, **kwargs)
-
-
 class WeightedLinear(Linear):
     class Inputs(Network.Inputs):
         def __init__(self, args, environment):
@@ -510,23 +416,20 @@ class WeightedLinear(Linear):
         def preprocessing(self):
             return {'weights': op.tofloat(self.weights_placeholder)}
 
-    def __init__(self, args, environment, inputs, role):
-        Network.__init__(self, args, environment, inputs, role)
-        self.inputs = inputs
-
     def loss(self, truth, prediction):
         delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
         weights = op.optional_clip(self.inputs.weights_placeholder, 0, 100, True)
         return tf.reduce_mean(weights * tf.square(delta, name='square'), name='loss')
 
 
-class ActorCritic(DQN):
+class ActorCritic(Network):
     class Inputs(Network.Inputs):
         def __init__(self, args, environment):
             Network.Inputs.__init__(self, args, environment)
 
-            self.states_placeholder = op.float([None, args.phi_frames] + list(environment.get_state_space()), name='state')
-            self.next_states_placeholder = op.float([None, args.phi_frames] + list(environment.get_state_space()), name='next_state')
+            with tf.name_scope('inputs'):
+                self.states_placeholder = op.float([None, args.phi_frames] + list(environment.get_state_space()), name='state')
+                self.next_states_placeholder = op.float([None, args.phi_frames] + list(environment.get_state_space()), name='next_state')
 
     def build_networks(self):
         self.inputs = self.Inputs(self.args, self.environment)
@@ -536,9 +439,12 @@ class ActorCritic(DQN):
                 target_actor = self.actor(self.inputs.next_states_placeholder)
                 target_critic_next_states = self.critic(self.inputs.next_states_placeholder, target_actor)
 
-            with tf.variable_scope('train_network'):
-                self.actor(self.inputs.states_placeholder)  # required to keep variables in order for assignment
-                train_critic_states = self.critic(self.inputs.states_placeholder, self.inputs.actions_placeholder)
+            with tf.name_scope('train_actor_critic'), tf.variable_scope('train_network'):
+                self.train_actor_states = self.actor(self.inputs.states_placeholder)
+                self.train_critic_states_actor_actions = self.critic(self.inputs.states_placeholder, self.train_actor_states)
+
+            with tf.name_scope('train_critic_action_placeholder'), tf.variable_scope('train_network', reuse=True):
+                train_critic_states_placeholder_actions = self.critic(self.inputs.states_placeholder, self.inputs.actions_placeholder)
 
         with tf.device('/gpu:1'):
             with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
@@ -547,11 +453,11 @@ class ActorCritic(DQN):
 
             with tf.name_scope('loss'):
                 truth = self.inputs.rewards + self.args.discount * (1.0 - self.inputs.terminals) * op.max(target_critic_next_states)
-                prediction = op.max(train_critic_states)
+                prediction = op.max(train_critic_states_placeholder_actions)
 
                 truth = tf.stop_gradient(truth)
 
-                self.loss_op = tf.reduce_mean(tf.square(truth - prediction))
+                self.loss_op = tf.reduce_mean(tf.square(truth - prediction)) + tf.add_n([0.01 * tf.nn.l2_loss(var) for var in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network/critic')])
                 self.priority_op = tf.pow(truth - prediction, self.args.priority_temperature)
 
             with tf.name_scope('optimizer'):
@@ -559,98 +465,37 @@ class ActorCritic(DQN):
 
     def actor(self, state):
         with tf.variable_scope('actor'):
-            fc1, w1, b1 = op.linear(op.flatten(state), 300, name='fc1')
-            fc2, w2, b2 = op.linear(fc1, 300, name='fc2')
-            action, w3, b3 = op.linear(fc2, self.environment.get_num_actions(), name='actions', activation_fn='tanh')
+            fc1, w1, b1 = op.linear(op.flatten(state), 400, name='fc1', stddev=0.001, bias_start=0.001)
+            fc2, w2, b2 = op.linear(fc1, 300, name='fc2', stddev=0.001, bias_start=0.001)
+            action, w3, b3 = op.linear(fc2, self.environment.get_num_actions(), name='actions', activation_fn='tanh', stddev=0.001, bias_start=0.001)
 
-        return action * 2
+            return action * 2
 
     def critic(self, state, action):
         with tf.variable_scope('critic'):
-            fc1, w1, b1 = op.linear(op.merge(op.flatten(state), action), 300, name='fc1')
-            fc2, w2, b2 = op.linear(fc1, 300, name='fc2')
-            q, w4, b4 = op.linear(fc2, 1, name='value', activation_fn='none')
+            fc1, w1, b1 = op.linear(op.flatten(state), 400, name='fc1', stddev=0.001, bias_start=0.001)
+            fc2, w2, b2 = op.linear(fc1, 300, name='fc2', activation_fn='none', stddev=0.001, bias_start=0.001)
+            fc2a, w3, b3 = op.linear(action, 300, name='fc3', activation_fn='none', stddev=0.001, bias_start=0.001)
+            q, w4, b4 = op.linear(tf.nn.relu(fc2 + fc2a - b2), 1, name='value', activation_fn='none', stddev=0.001, bias_start=0.001)
 
-        return q
+            return q
 
     def build_train_op(self):
-        actor_optimizer = tf.train.AdamOptimizer(0.001)
-        critic_optimizer = tf.train.AdamOptimizer(0.0001)
+        actor_optimizer = tf.train.AdamOptimizer(0.0001)
+        critic_optimizer = tf.train.AdamOptimizer(0.001)
 
         critic_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network/critic')
-        actor_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network/actor')
+        actor_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network/actor')
 
         update_critic = critic_optimizer.minimize(self.loss_op, var_list=critic_variables)
 
         with tf.control_dependencies([update_critic]):
             # grad_action(q_value)
-            action_gradient = tf.gradients(self.agent_output, [self.agent_output_action])[0]
+            action_gradient = tf.gradients(self.train_critic_states_actor_actions, [self.train_actor_states])[0]
 
             # grad_theta_actor(actions)
-            actor_gradients = tf.gradients(self.agent_output_action, actor_variables, -action_gradient)
+            actor_gradients = tf.gradients(self.train_actor_states, actor_variables, -action_gradient)
 
             actor_gradients = zip(actor_gradients, actor_variables)
 
             return actor_optimizer.apply_gradients(actor_gradients, global_step=self.global_step)
-
-# class ActorCriticPG(DQN):
-#     def __init__(self, Type, args, environment, role):
-#         self.args = args
-#         self.environment = environment
-#         self.tensorboard_process = None
-#
-#         self.training_iterations = 0
-#         self.batch_loss = 0
-#         self.learning_rate = 0
-#
-#         self.sess = self.start_session(args)
-#         self.global_step = tf.Variable(0, name='global_step', trainable=False)
-#
-#         with op.context(floatx=tf.float32, floatsafe=False):
-#             inputs = ActorCriticPG.Inputs(args, environment)
-#
-#             with tf.device('/gpu:0'):
-#                 with tf.variable_scope('target_network'):
-#                     # actor(placeholder)
-#                     # critic(placeholder)
-#
-#                 with tf.variable_scope('train_network'):
-#                     # actor(placeholder)
-#                     # critic(placeholder)
-#
-#             with tf.device('/gpu:1'):
-#                 with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
-#                     # actor(placeholder)
-#
-#             with tf.device('/gpu:1'):
-#                 # optimize and gradient
-#
-#
-#
-#
-#                 self.target_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='target_network')
-#                 self.train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='train_network')
-#                 self.assign_ops = [target.assign(self.args.target_network_alpha * target + (1 - self.args.target_network_alpha) * train) for target, train in zip(self.target_vars, self.train_vars)]
-#
-#                 self.inputs = inputs
-#
-#         self.initialize_op = tf.initialize_all_variables()
-#         self.initialize()
-#         self.tensorboard()
-#
-#     def loss(self, truth, prediction):
-#         assert prediction.get_shape().as_list() == truth.get_shape().as_list(), 'prediction and truth shapes must match'
-#         delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
-#         return tf.reduce_mean(tf.square(delta, name='square'), name='loss')
-#
-#     def actor(self, states):
-#         with op.context(default_activation_fn='relu'):
-#             flattened_states = op.flatten(states, name="states")
-#
-#             with tf.variable_scope('actor'):
-#
-#
-#             return self.q_value
-#
-#     def critic(self, states, actions):
-#         with tf.variable_scope('critic'):

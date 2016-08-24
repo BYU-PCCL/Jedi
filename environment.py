@@ -5,16 +5,49 @@ import tensorflow as tf
 from enum import Enum
 import fastcache
 
-# TODO: create a Environment class that defines some basic stuff shared between environments
 
-class ArrayEnvironment:
+class Environment(object):
     def __init__(self, args):
         self.args = args
+        self.score = 0
+        self.episodes = 0
+        self.frames = 0
+        self.terminal = False
+        self.state = None
+
+    def get_episodes(self):
+        return self.episodes
+
+    def get_score(self):
+        return self.score
+
+    def get_state_datatype(self):
+        return np.float32
+
+    def get_action_datatype(self):
+        return np.float32
+
+    def get_state(self):
+        return self.state
+
+    def reset(self):
+        self.episodes += 1
+        self.score = 0
+        self.frames = 0
+        self.terminal = False
+
+    def generate_test(self):
+        return None
+
+
+class Array(Environment):
+    def __init__(self, args):
+        Environment.__init__(self, args)
+
         self.size = 20
         self.goal = 4  # self.size // 2
         self.position = [0]
-        self.episodes = 0
-        self.score = 0
+
         self.reset()
 
     def get_num_actions(self):
@@ -41,22 +74,14 @@ class ArrayEnvironment:
         next_state = self.transition(state, action)
 
         if next_state[0] == self.goal:
-            return 50
+            return 1
         return 0  # abs(self.goal - state) - abs(self.goal - next_state)
 
     def transition(self, state, action):
         if action == 1:
             return [(state[0] + 1) % self.size]
-            #return [min(state[0] + 1, self.size - 1)]
         else:
             return [(state[0] - 1) % self.size]
-            #return [max(0, (state[0] - 1))]
-
-    def get_episodes(self):
-        return self.episodes
-
-    def get_score(self):
-        return self.score
 
     def get_state(self):
         return np.array(self.position)
@@ -68,9 +93,7 @@ class ArrayEnvironment:
         return self.position[0] == self.goal or self.frames >= self.args.max_frames_per_episode
 
     def reset(self):
-        self.episodes += 1
-        self.score = 0
-        self.frames = 0
+        Environment.reset(self)
 
         while True:
             self.position = [random.randint(0, self.size - 1)]
@@ -99,9 +122,10 @@ class ArrayEnvironment:
         return states, actions, rewards, next_states, terminals
 
 
-class GenericOpenAIGym:
+class GenericOpenAIGym(Environment):
     def __init__(self, args):
-        self.args = args
+        Environment.__init__(self, args)
+
         self.env = gym.make(args.openaigym_environment)
 
         self.score = 0
@@ -140,15 +164,6 @@ class GenericOpenAIGym:
 
         return self.get_state(), reward, self.terminal or (self.frames >= self.args.max_frames_per_episode)
 
-    def get_episodes(self):
-        return self.episodes
-
-    def get_score(self):
-        return self.score
-
-    def get_state(self):
-        return self.state
-
     def max_state_value(self):
         return np.max(self.env.observation_space.high)
 
@@ -156,26 +171,17 @@ class GenericOpenAIGym:
         return np.min(self.env.observation_space.low)
 
     def reset(self):
-        self.episodes += 1
-        self.frames = 0
+        Environment.reset(self)
         self.env.reset()
 
-        self.terminal = False
-        self.score = 0
 
-    def generate_test(self):
-        return None
-
-
-class AtariEnvironment:
+class Atari(Environment):
     def __init__(self, args):
-        self.args = args
+        Environment.__init__(self, args)
+
         self.env = gym.make(args.rom + '-gray-v0')
 
-        self.score = 0
-        self.episodes = 0
         self.terminal = False
-        self.frames = 0
         self.lives = 0
         self.state = np.zeros((args.resize_width, args.resize_height), dtype=np.uint8)
         self.buffer = np.zeros((args.buffer_size, args.resize_height, args.resize_width), dtype=np.uint8)
@@ -199,8 +205,6 @@ class AtariEnvironment:
                                                          allow_soft_placement=True,
                                                          log_device_placement=self.args.verbose))
 
-
-
         self.reset()
 
     def get_num_actions(self):
@@ -211,6 +215,12 @@ class AtariEnvironment:
 
     def get_action_space(self):
         return tuple()  # No dimension
+
+    def get_state_datatype(self):
+        return np.int8
+
+    def get_action_datatype(self):
+        return np.int8
 
     def render(self):
         return self.state
@@ -271,24 +281,19 @@ class AtariEnvironment:
         return np.min(self.env.observation_space.low)
 
     def reset(self):
-        self.episodes += 1
-        self.frames = 0
+        Environment.reset(self)
+
         self.env.reset()
 
         self.buffer.fill(0)
         self.state.fill(0)
-        self.terminal = False
-        self.score = 0
 
         if self.args.max_initial_noop > 0:
             for _ in range(random.randint(0, self.args.max_initial_noop // self.args.actions_per_tick)):
                 self.act(0)
 
-    def generate_test(self):
-        return None
 
-
-class MazeEnvironment:
+class Maze(Environment):
     class Objects(Enum):
         user = 0
         wall = 1
@@ -303,8 +308,9 @@ class MazeEnvironment:
         goal = 200
 
     def __init__(self, args):
+        Environment.__init__(self, args)
+
         self.args = args
-        self.episodes = 0
 
         self.maze, self.start = self._build_maze()
 
@@ -435,9 +441,6 @@ class MazeEnvironment:
         return states
 
     def reset(self):
-        self.episodes += 1
-        self.score = 0
-        self.frames = 0
-        self.terminal = False
+        Environment.reset(self)
 
         self.position = self.start

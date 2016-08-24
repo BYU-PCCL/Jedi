@@ -9,18 +9,17 @@ class Memory:
         self.args = args
         self.dims = environment.get_state_space()
 
-        self.actions = np.empty(tuple([args.replay_memory_size]) + environment.get_action_space(), dtype=np.uint8)
-        self.rewards = np.empty(args.replay_memory_size, dtype=np.int32)
+        self.actions = np.empty(tuple([args.replay_memory_size]) + environment.get_action_space(), dtype=environment.get_action_datatype())
+        self.rewards = np.empty(args.replay_memory_size, dtype=np.float64)
         self.priorities = np.zeros(args.replay_memory_size, dtype=np.float64)
-        self.sample_priorities = np.zeros(args.replay_memory_size, dtype=np.float64)
-        self.screens = np.empty(tuple([args.replay_memory_size]) + self.dims, dtype=np.uint8)
+        self.screens = np.empty(tuple([args.replay_memory_size]) + self.dims, dtype=environment.get_state_datatype())
         self.terminals = np.empty(args.replay_memory_size, dtype=np.bool)
 
         self.count = 0
         self.current = 0
         self.priority_sum = 0
 
-        self.void_phi = np.zeros(tuple([args.phi_frames]) + self.dims, dtype=np.uint8)
+        self.void_phi = np.zeros(tuple([args.phi_frames]) + self.dims, dtype=environment.get_state_datatype())
 
         # start a thread
 
@@ -72,9 +71,9 @@ class Memory:
         indexes = []
         random_indexes = []
 
-        prestates = np.zeros((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
-        poststates = np.zeros((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
-        lookaheads = np.zeros((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=np.uint8)
+        prestates = np.zeros((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=self.screens.dtype)
+        poststates = np.zeros((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=self.screens.dtype)
+        lookaheads = np.zeros((self.args.batch_size, self.args.phi_frames) + self.dims, dtype=self.screens.dtype)
 
         if self.args.use_prioritization:
             random_indexes = self.sample_priority_indexes(self.args.batch_size)
