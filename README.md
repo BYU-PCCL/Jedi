@@ -130,11 +130,18 @@ Ideas Without Context
 - Sample 15 priorities and 15 random
 - parameterize with fft (convolution) - try to find paper and consider implementing
 - maximum margin
-- gpu:3 test on 2 gpu machine
 - http://arxiv.org/pdf/1512.02011v2.pdf - increase discount rate during training,
 - http://arxiv.org/pdf/1605.05365v2.pdf - consider adding a "duration" output for how long to apply the command
-
 - http://arxiv.org/pdf/1602.07714v1.pdf - gradient/reward clipping sucks
+- (Based on http://jmlr.org/proceedings/papers/v37/schaul15.html) 
+  Transform V(s, theta) to V(s, g, theta) and train using V(s, s_prime, theta) using s_prime sampled from experience database
+  Exploration can be guided by choosing g differently
+- Importance Weighting of Experience
+  drop Argmin_x(KL(experience db with x, experience db without x)) from database
+- Macro Actions - train network (LSTM) to output sequences of actions
+- Episodic Control - Pass the best-sequence-so-far in as input into the network
+- Episodic Control - Pass the best-sequence-so-far in as input into the network, learn a probabilistic gate between predicted action and bssf action
+- Uncertianty - Give neurons a pulse frequency that is governed by activation (high action potential = fire, low action potential = fire sometimes with probability = f(frequency), very low action potential = don't fire)
 
 
 

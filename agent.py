@@ -332,7 +332,7 @@ class ExperienceAsAModel(Agent):
             #     print 'weights'
             #     print np.array_str(weights, precision=3, max_line_width=250)
 
-            self.memory.update(idx, priority=tderror)
+            self.memory.update(idx, priority=weights)
 
 
             # todo distributed:

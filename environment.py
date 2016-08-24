@@ -74,7 +74,7 @@ class Array(Environment):
         next_state = self.transition(state, action)
 
         if next_state[0] == self.goal:
-            return 1
+            return 50
         return 0  # abs(self.goal - state) - abs(self.goal - next_state)
 
     def transition(self, state, action):

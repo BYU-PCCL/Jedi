@@ -78,7 +78,7 @@ class Network(object):
     def loss(self, truth, prediction):
         assert prediction.get_shape().as_list() == truth.get_shape().as_list(), 'prediction and truth shapes must match'
         delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
-        return tf.reduce_sum(tf.square(delta, name='square'), name='loss')
+        return tf.reduce_mean(tf.square(delta, name='square'), name='loss')
 
     def priority(self, truth, prediction):
         return tf.pow(truth - prediction, self.args.priority_temperature)
@@ -94,13 +94,14 @@ class Network(object):
             with tf.variable_scope('target_network'):
                 target_output_next_states = self.build(self.inputs.next_states)
 
+        with tf.device('/gpu:1'):
             with tf.variable_scope('train_network'):
                 train_output_states = self.build(self.inputs.states)
 
             with tf.variable_scope('train_network', reuse=True):
                 train_output_next_states = self.build(self.inputs.next_states)
 
-        with tf.device('/gpu:1'):
+        with tf.device('/gpu:0'):
             with tf.name_scope('thread_actor'), tf.variable_scope('target_network', reuse=True):
                 self.agent_output = self.build(self.inputs.states)
                 self.agent_output_action = self.action(self.agent_output)
@@ -118,10 +119,10 @@ class Network(object):
                 self.loss_op = self.loss(truth=truth, prediction=prediction)
                 self.priority_op = self.priority(truth=truth, prediction=prediction)
 
-            with tf.name_scope('optimizer'):
-                self.train_op = self.build_train_op(learning_rate=self.learning_rate_op,
-                                                    loss=self.loss_op,
-                                                    global_step=self.global_step)
+        with tf.name_scope('optimizer'):
+            self.train_op = self.build_train_op(learning_rate=self.learning_rate_op,
+                                                loss=self.loss_op,
+                                                global_step=self.global_step)
 
     def build_train_op(self, learning_rate, loss, global_step):
         # It's about 2x faster for us to compute/apply the gradients than to use optimizer.minimize()
@@ -129,7 +130,7 @@ class Network(object):
                                               decay=self.args.rms_decay,
                                               momentum=float(self.args.rms_momentum),
                                               epsilon=self.args.rms_eps)
-        gradient = optimizer.compute_gradients(loss)
+        gradient = optimizer.compute_gradients(loss, colocate_gradients_with_ops=True)
         gradients = [(grad, var) for grad, var in gradient if grad is not None]
 
         return optimizer.apply_gradients(gradients, global_step=global_step)

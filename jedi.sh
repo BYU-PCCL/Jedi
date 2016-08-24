@@ -68,7 +68,7 @@ elif [ "$1" = run_local ]; then
     elif [ "$HOSTNAME" = ghost ]; then
         echo "Specify command to be run in jedi.sh"
 
-    elif [ "$HOSTNAME" = naga-All-Series ]; then
+    elif [ "$HOSTNAME" = naga ]; then
         echo "Specify command to be run in jedi.sh"
 
     elif [ "$HOSTNAME" = morita.cs.byu.edu ]; then

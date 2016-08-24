@@ -31,7 +31,7 @@ class Parameters():
         environment_args = self.parser.add_argument_group('Environment')
         environment_args.add_argument('--actions_per_tick', default=1, type=int)
         environment_args.add_argument('--rom', default="Breakout")
-        environment_args.add_argument('--environment_type', default="Atari", choices=self.module_to_dict(environment).keys())
+        environment_args.add_argument('--environment_type', default="Atari", choices=self.module_to_dict(environment, [environment.Environment]).keys())
         environment_args.add_argument('--openaigym_environment', default="Pendulum-v0")
         environment_args.add_argument('--max_initial_noop', default=8, type=int)
         environment_args.add_argument('--resize_width', default=84, type=int)
@@ -77,8 +77,8 @@ class Parameters():
         args = self.parser.parse_args()
         ignored_args = ['verbose', 'sql_host', 'sql_db', 'sql_port', 'sql_user', 'sql_password',
                         'vis', 'name', 'total_ticks', 'evaluate_frequency', 'use_sql']
-        changed_args = ['rom'] + [key + "=" + str(getattr(args, key)) for key in vars(args)
-                                  if key not in ignored_args and getattr(args, key) != self.parser.get_default(key)]
+        changed_args = [key + "=" + str(getattr(args, key)) for key in vars(args)
+                                  if key not in ignored_args and (key == 'rom' or getattr(args, key) != self.parser.get_default(key))]
         changed_args = "-".join(changed_args) if len(changed_args) > 0 else "defaults"
 
         args.job_id = str(random.randint(10000000, 99999999))
@@ -127,7 +127,7 @@ class Parameters():
                      and getattr(module, x) not in exclude])
 
     def parse_environment(self, env_string):
-        return self.module_to_dict(environment)[env_string]
+        return self.module_to_dict(environment, [environment.Environment])[env_string]
 
     def parse_agent_type(self, agent_string):
         return self.module_to_dict(agent)[agent_string]

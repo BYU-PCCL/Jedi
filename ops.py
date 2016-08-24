@@ -86,8 +86,8 @@ def linear(source, output_size, stddev=0.002, initializer='truncated-normal', bi
 
     with tf.variable_scope(name + '_linear'):
         # Emperically, I have tried using _context['floatx'] to define the type here for w and b, and it does badly
-        w = tf.reshape(tf.get_variable("weight", [shape[1] * output_size], tf.float32, initializer), [shape[1], output_size])
-        b = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(bias_start))
+        w = tf.reshape(tf.get_variable("weight", [shape[1] * output_size], _context['floatx'], initializer), [shape[1], output_size])
+        b = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(bias_start), dtype=_context['floatx'])
 
         out = tf.nn.bias_add(tf.matmul(source, w), b)
 
@@ -105,8 +105,8 @@ def conv2d(source, size, filters, stride, padding='SAME', stddev=0.02, initializ
 
     with tf.variable_scope(name + '_conv2d'):
         w = tf.reshape(tf.get_variable("weight", shape=[size * size * shape[1] * filters], initializer=initializer,
-                                       dtype=tf.float32), [size, size, shape[1], filters])
-        b = tf.get_variable("bias", [filters], initializer=tf.constant_initializer(bias_start))
+                                       dtype=_context['floatx']), [size, size, shape[1], filters])
+        b = tf.get_variable("bias", [filters], initializer=tf.constant_initializer(bias_start), dtype=_context['floatx'])
 
         c = tf.nn.conv2d(source, w, strides=[1, 1, stride, stride], padding=padding, data_format='NCHW')
         out = tf.nn.bias_add(c, b, data_format='NCHW')

@@ -92,25 +92,14 @@ for tick in main_loop:
         eval_pending = False
         environment.reset()
 
-# TODO
 # HIGH
 # baselineduel not working great
-# y - mean(y) between layers
-# randomize b
-# center inputs about 0
 
 # MEDIUM
 # death ends episode
-# negative reward on death
-# add constrained priorities
-# add with op.defaults({'activation_fn': 'relu', 'floatx': 'float16'}): to ops.py
-# rename states_placeholder to state_placeholder and remove all plural inputs
-# dynamically build list of networks for parameters.py
 # add --network_name-parameter dynamic parameters for each network and agent
 # add auto-complete to params
-
 
 # LOW
 # dynamic layer labeling
 # add checkpoints
-# add gray to custom gym
