@@ -2,6 +2,7 @@ import tensorflow as tf
 import subprocess
 import ops as op
 from functools import reduce
+import os
 
 class Network(object):
     class Inputs:
@@ -167,8 +168,8 @@ class Network(object):
             self.tensorboard_process.kill()
         tf.train.SummaryWriter(self.args.tf_summary_path, self.sess.graph)
         self.tensorboard_process = subprocess.Popen(["tensorboard", "--logdir=" + self.args.tf_summary_path],
-                                                    # stdout=open(os.devnull, 'w'),
-                                                    # stderr=open(os.devnull, 'w'),
+                                                    stdout=None if self.args.verbose else open(os.devnull, 'w'),
+                                                    stderr=None if self.args.verbose else open(os.devnull, 'w'),
                                                     close_fds=True)
 
     def update(self):
