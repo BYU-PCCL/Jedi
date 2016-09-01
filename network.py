@@ -77,7 +77,7 @@ class Network(object):
         return op.get(op.tofloat(train_output_states), self.inputs.actions)
 
     def loss(self, truth, prediction):
-        assert prediction.get_shape().as_list() == truth.get_shape().as_list(), 'prediction and truth shapes must match'
+        assert prediction.get_shape().as_list() == truth.get_shape().as_list(), 'prediction and truth shapes must match' + str(truth.get_shape().as_list()) + " / " + str(prediction.get_shape().as_list())
         delta = op.optional_clip(truth - prediction, -1.0, 1.0, self.args.clip_tderror)
         return tf.reduce_mean(tf.square(delta, name='square'), name='loss')
 

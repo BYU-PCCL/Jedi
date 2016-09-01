@@ -3,14 +3,12 @@ import random
 import numpy as np
 from memory import Memory
 import sys
-import tensorflow as tf
-import time
+from threading import Thread
 
 if sys.version[0] == '2':
     import Queue as Queue
 else:
     import queue as Queue
-from threading import Thread
 
 
 class Agent(object):
@@ -300,21 +298,8 @@ class ExperienceAsAModel(Agent):
         while True:
             self.ready_queue.get()  # Notify main thread a training has complete
             states, actions, rewards, next_states, terminals, lookaheads, idx = self.memory.sample()
-            state_indexes = states.squeeze((1, 2)).argmax(1)
 
-            old_policy_action_probabilities = self.action_probabilities[idx].copy()
-            old_policy_state_probabilities = self.state_probabilities[idx].copy()
-
-            policy_actions = self.current_policy()
-            policy_actions_for_sample = policy_actions[[self.state_argmax_to_agent_index_map[i] for i in state_indexes]]
-            on_policy_mask = actions == policy_actions_for_sample
-
-            epsilon = self.args.exploration_epsilon_evaluation
-            current_policy_action_probabilities = self.distribution_action_given_state(on_policy_mask, epsilon)
-            current_policy_state_probabilities = self.distribution_state_given_policy(epsilon, policy_actions)[state_indexes]
-
-            # weights = current_policy_action_probabilities / old_policy_action_probabilities
-            weights = current_policy_state_probabilities / old_policy_state_probabilities
+            weights = np.ones_like(rewards)
 
             tderror, loss = self.network.train(states=states,
                                                actions=actions,
@@ -323,17 +308,33 @@ class ExperienceAsAModel(Agent):
                                                rewards=rewards,
                                                weights=weights)
 
-            # if np.isnan(loss) or self.network.training_iterations % 100 == 0:
-            #     print np.isnan(loss)
-            #     print 'old_action_probs'
-            #     print np.array_str(old_policy_action_probabilities, precision=3, max_line_width=250)
-            #     print 'current_action_probs'
-            #     print np.array_str(current_policy_action_probabilities, precision=3, max_line_width=250)
-            #     print 'weights'
-            #     print np.array_str(weights, precision=3, max_line_width=250)
+            # compute weights of all memory experiences
+            # update weights of all memory experiences
 
-            self.memory.update(idx, priority=weights)
+            count = self.memory.count
+            old_policy_action_probabilities = self.action_probabilities[0:count].copy()
+            old_policy_state_probabilities = self.state_probabilities[0:count].copy()
 
+            policy_actions = self.current_policy()
+            state_indexes = self.memory.screens[0:count].squeeze(1).argmax(1)
+
+            policy_actions_for_sample = policy_actions[[self.state_argmax_to_agent_index_map[i] for i in state_indexes]]
+            on_policy_mask = actions == policy_actions_for_sample
+
+            epsilon = self.args.exploration_epsilon_evaluation
+            current_policy_action_probabilities = self.distribution_action_given_state(on_policy_mask, epsilon)
+            current_policy_state_probabilities = self.distribution_state_given_policy(epsilon, policy_actions)[state_indexes]
+
+            weights = current_policy_action_probabilities / old_policy_action_probabilities
+            weights *= current_policy_state_probabilities / old_policy_state_probabilities
+
+            self.memory.update(range(count), weights)
+
+            if self.iterations % 1000 == 0:
+                print 'max', np.max(self.memory.priorities[0:count]), \
+                    'min', np.min(self.memory.priorities[0:count]), \
+                    'mean', np.mean(self.memory.priorities[0:count]), \
+                    'var', np.var(self.memory.priorities[0:count]), '\033[K'
 
             # todo distributed:
             # class Distributed_Runner()

@@ -52,6 +52,7 @@ class Parameters():
         agent_args.add_argument('--threads', default=12, type=int)
         agent_args.add_argument('--lookahead', default=10, type=int, help='in frames')
         agent_args.add_argument('--use_prioritization', action='store_const', const=True, default=False)
+        agent_args.add_argument('--default_priority', default=-1.0, type=float, help='-1 uses an exponential moving average of priorities')
         agent_args.add_argument('--priority_temperature', default=2.0, type=float, help='n where tderror^n')
 
         network_args = self.parser.add_argument_group('Network')
@@ -134,13 +135,3 @@ class Parameters():
 
     def parse_network_type(self, network_string):
         return self.module_to_dict(network, [network.Network])[network_string]
-
-#environment_args.add_argument('--death_ends_episode', action='store_const', const=True, default=False, help='load network and agent')
-
-#harness_args.add_argument('--load_checkpoint', action='store_const', const=True, default=False, help='load network and agent')
-
-#agent_args.add_argument('--priority_epsilon', default=.05, type=float, help='the epsilon associated with h2 priority')
-#agent_args.add_argument('--prioritization_type', default="uniform", help='uniform, h0, h1, or h2')
-#agent_args.add_argument('--clear_priority_frequency', default=0, type=int, help='how often to reset priorities')
-
-#network_args.add_argument('--constrained_lambda', default=1.0, type=float, help='the lambda used for constrained networks (ignored if network_type is not constrained)')

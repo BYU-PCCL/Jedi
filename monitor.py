@@ -153,7 +153,7 @@ class Monitor:
 
         elif self.args.verbose:
             # Space accounts for the Fore.GREEN space that gets printed by evaluation
-            print(" " + log, end="\r")
+            print(" " + log, end="\033[K\r")  # clear to the end of the line and prepare the cursor to overwrite
 
         sys.stdout.flush()
 

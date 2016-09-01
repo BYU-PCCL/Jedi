@@ -142,9 +142,5 @@ Ideas Without Context
 - Episodic Control - Pass the best-sequence-so-far in as input into the network
 - Episodic Control - Pass the best-sequence-so-far in as input into the network, learn a probabilistic gate between predicted action and bssf action
 - Uncertianty - Give neurons a pulse frequency that is governed by activation (high action potential = fire, low action potential = fire sometimes with probability = f(frequency), very low action potential = don't fire)
-
-
-
-Experiment Data to be deleted
-=============================
-
+- Create a network with a unique path for each q-value, encouraging unique representations for each action (Hydra)
+- Create a loss function that encourages q-values of non-chosen actions to remain constant

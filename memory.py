@@ -18,6 +18,7 @@ class Memory:
         self.count = 0
         self.current = 0
         self.priority_sum = 0
+        self.priority_exp_avg = 0
 
         self.void_phi = np.zeros(tuple([args.phi_frames]) + self.dims, dtype=environment.get_state_datatype())
 
@@ -29,15 +30,18 @@ class Memory:
                 self.priority_sum -= self.priorities[i]
                 self.priorities[i] = priority[si]
                 self.priority_sum += priority[si]
+                self.priority_exp_avg -= (1 - .99999) * (self.priority_exp_avg - priority[si])
 
-    def add(self, screen, reward, action, terminal, priority=100):
+    def add(self, screen, reward, action, terminal, priority=None):
         assert screen.shape == self.dims
         # NB! screen is post-state, after action and reward
         self.actions[self.current] = action
         self.rewards[self.current] = reward
         self.screens[self.current, ...] = screen
         self.terminals[self.current] = terminal
-        self.update([self.current], [priority])
+
+        # TODO: this is bad, we need to figure out what to do with priority-less entries. maybe every batch has 1 random element with 0 probability?
+        self.update([self.current], [priority if priority is not None else (self.priority_exp_avg if self.args.default_priority < 0 else self.args.default_priority)])
 
         self.count = max(self.count, self.current + 1)
         self.current = (self.current + 1) % self.args.replay_memory_size

@@ -171,7 +171,7 @@ elif [ "$1" = fsl_clean ]; then
     echo    # (optional) move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]
     then
-        ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ && rm *.out"
+        ssh $FSL_USERNAME@ssh.fsl.byu.edu -t "cd \$HOME/fsl_groups/fslg_pccl/projects/jedi/ && rm -r * && echo '' && ls -al"
         echo "Output cleaned."
     fi
 

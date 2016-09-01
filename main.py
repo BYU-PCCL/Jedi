@@ -91,9 +91,16 @@ for tick in main_loop:
         is_evaluate = eval_pending
         eval_pending = False
         environment.reset()
+        state = environment.get_state()
 
 # HIGH
-# baselineduel not working great
+# run dqn test for baseline, baselineduel, etc.
+# get gazeebo simulator working
+# run dqn test for different roms
+# improve exploration mechanism for actor critic / replicate results
+# hydra network for uncorrelated q-values
+# constancy network for uncorrelated q-values
+#
 
 # MEDIUM
 # death ends episode
