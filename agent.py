@@ -330,12 +330,6 @@ class ExperienceAsAModel(Agent):
 
             self.memory.update(range(count), weights)
 
-            if self.iterations % 1000 == 0:
-                print 'max', np.max(self.memory.priorities[0:count]), \
-                    'min', np.min(self.memory.priorities[0:count]), \
-                    'mean', np.mean(self.memory.priorities[0:count]), \
-                    'var', np.var(self.memory.priorities[0:count]), '\033[K'
-
             # todo distributed:
             # class Distributed_Runner()
             # switch thread_id % n:
